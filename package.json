@@ -1,0 +1,69 @@
+{
+  "name": "opal-file-manager",
+  "productName": "Opal",
+  "version": "0.2.0",
+  "description": "Fast, keyboard-friendly dual-pane file manager for Windows, macOS and Linux — tabs, expandable folders, Quick Look, batch rename and local semantic search.",
+  "keywords": [
+    "file-manager",
+    "electron",
+    "dual-pane",
+    "finder",
+    "quick-look",
+    "semantic-search",
+    "windows",
+    "macos",
+    "linux"
+  ],
+  "homepage": "https://github.com/enprevo/opal#readme",
+  "bugs": {
+    "url": "https://github.com/enprevo/opal/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/enprevo/opal.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Enrico Prevosti",
+    "email": "44800378+enprevo@users.noreply.github.com",
+    "url": "https://github.com/enprevo"
+  },
+  "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && playwright test",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1",
+    "lucide-react": "^1.59.0",
+    "marked": "^18.1.1",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^6.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

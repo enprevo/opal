@@ -1,0 +1,71 @@
+appId: com.enricoprevosti.opal
+productName: Opal
+copyright: Copyright © 2026 Enrico Prevosti and contributors
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  # Trim heavy runtime dependencies that are never loaded by the Node build.
+  - '!**/node_modules/onnxruntime-web/**'
+  - '!**/node_modules/pdfjs-dist/{build,web,image_decoders,types}/**'
+  - '!**/node_modules/@huggingface/transformers/dist/{transformers.js,transformers.min.js,transformers.web*,ort-wasm*}'
+  - '!**/node_modules/**/*.{map,md,d.ts}'
+  - '!**/node_modules/@napi-rs/**'
+asarUnpack:
+  - '**/node_modules/onnxruntime-node/**'
+  - '**/node_modules/onnxruntime-common/**'
+  - '**/node_modules/sharp/**'
+  - '**/node_modules/@img/**'
+icon: build/icon.png
+# Keeps only the ONNX Runtime binaries of the platform/CPU being packaged.
+afterPack: build/afterPack.cjs
+
+# Architectures are not listed here on purpose: each installer is built on a native runner
+# (x64 or arm64) so that native modules (onnxruntime-node, sharp) match the target CPU.
+
+win:
+  target: [nsis, portable]
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+portable:
+  artifactName: ${productName}-${version}-win-${arch}-portable.${ext}
+
+mac:
+  category: public.app-category.utilities
+  target: [dmg, zip]
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  minimumSystemVersion: '12.0'
+
+linux:
+  category: Utility
+  maintainer: Enrico Prevosti <44800378+enprevo@users.noreply.github.com>
+  vendor: Opal contributors
+  synopsis: Dual-pane file manager
+  description: Fast, keyboard-friendly dual-pane file manager with tabs, Quick Look, batch rename and local semantic search.
+  target: [AppImage, deb, rpm]
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  mimeTypes:
+    - inode/directory
+  desktop:
+    entry:
+      Name: Opal
+      Comment: Dual-pane file manager
+      Categories: Utility;FileManager;System;
+      StartupWMClass: Opal
+deb:
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
+
+publish:
+  provider: github
+  owner: enprevo
+  repo: opal
+  releaseType: draft

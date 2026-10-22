@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest an idea or an improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the workflow or problem; how do you do it today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should Opal behave? Mention similar features in other file managers if useful.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?

@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: End-to-end tests (Ubuntu, virtual display)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npx playwright test
+      - name: End-to-end tests (Windows / macOS)
+        if: runner.os != 'Linux'
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: test-results/
+
+  # Installers are built on native runners for every OS/CPU pair so that the native AI runtime
+  # (onnxruntime-node) and image library (sharp) match the target machine.
+  release:
+    name: Release (${{ matrix.name }})
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, os: windows-latest, args: --win --x64 }
+          - { name: windows-arm64, os: windows-11-arm, args: --win --arm64 }
+          - { name: macos-arm64, os: macos-latest, args: --mac --arm64 }
+          - { name: macos-x64, os: macos-15-intel, args: --mac --x64 }
+          - { name: linux-x64, os: ubuntu-24.04, args: --linux --x64 }
+          - { name: linux-arm64, os: ubuntu-24.04-arm, args: --linux --arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - run: npm ci
+      - run: npm run build
+      - name: Build installers and attach them to a draft GitHub release
+        run: npx electron-builder ${{ matrix.args }} --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
