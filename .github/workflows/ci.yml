@@ -37,7 +37,7 @@ jobs:
       - name: End-to-end tests (Windows / macOS)
         if: runner.os != 'Linux'
         run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-results-${{ matrix.os }}
