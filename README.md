@@ -144,7 +144,8 @@ npm run dist:linux   # AppImage, deb, rpm                 (run on Linux; rpm nee
 ```
 
 Build each package on the operating system and CPU it targets: native modules (the ONNX AI runtime and `sharp`) are
-installed for the machine that runs `npm install`. Tagging a release (`git tag v0.2.0 && git push --tags`) makes
+installed for the machine that runs `npm install`. On Linux x64, run `ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm install`
+so the ONNX runtime doesn't download its GPU (CUDA) libraries: Opal runs its models on the CPU. Tagging a release (`git tag v0.2.0 && git push --tags`) makes
 GitHub Actions do exactly that on six native runners — Windows x64/ARM64, macOS Apple Silicon/Intel, Ubuntu
 x64/ARM64 — and attach the installers to a draft release. The test suite runs on Windows, macOS and Ubuntu for every
 push and pull request.
