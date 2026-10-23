@@ -30,9 +30,11 @@ understands what your documents are *about*, without sending anything to the clo
 
 | | |
 | --- | --- |
-| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, favorites in collapsible groups, recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
+| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
+| **Favorites** | Folders and files in nested, collapsible groups with separators. Right-click to give them a text or background colour, an icon or emoji, and a **shortcut key**: press <kbd>P</kbd> and you are in your Projects folder. *Organize favorites* reorders everything by drag and drop. |
+| **Find as you type** | Just type in a file list: matches are highlighted and <kbd>↑</kbd>/<kbd>↓</kbd> jump between them. <kbd>Tab</kbd> switches to *Filter* (hide the rest) and *Subfolders* (search the whole branch); type <kbd>/</kbd> to jump to a favorite or a path. |
 | **Expandable folders** | In Details view folders open in place like a tree: <kbd>→</kbd> expands, <kbd>←</kbd> collapses or jumps to the parent. Copying nested items asks whether to recreate the structure. |
-| **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, code with line numbers, archive contents, folder sizes — and use the arrow keys to flip through files. |
+| **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, source code with syntax colours and line numbers (C/C++, Python, JS/TS, Rust, Go, Java, C#, JSON, YAML, SQL, shell, assembly and more), archive contents, folder sizes — and use the arrow keys to flip through files. |
 | **Column view** | Finder-style Miller columns with a preview column. |
 | **Semantic search** | “invoice for the boiler repair” finds *fattura manutenzione caldaia*. Two small multilingual AI models run **on your computer**: one finds candidates by meaning, the other re-reads them to rank precisely, combined with keyword ranking. PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, e-mail, web pages, text and Markdown (code optionally). |
 | **Sort, group, columns** | Name, extension, size, type, dates, location, labels, image dimensions, item count. Group by kind, type, date, size, name or label. Drag columns to reorder, double-click to autosize. View, sorting and grouping are remembered per folder. |
@@ -80,6 +82,7 @@ where Finder conventions are added on top: <kbd>⌘</kbd>+<kbd>⌫</kbd> moves t
 | <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>W</kbd> / <kbd>Shift</kbd>+<kbd>W</kbd> | New / close / reopen tab | <kbd>Ctrl</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd> | Previous / next tab |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Find | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> | Search by meaning |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd>, mouse side buttons | Back / forward | <kbd>Ctrl</kbd>+<kbd>D</kbd> | Add / remove favorite |
+| Type any letters | Find as you type (<kbd>Tab</kbd>: filter / subfolders) | <kbd>/</kbd> | Go to a favorite or path |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>5</kbd> (macOS: <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>3</kbd>) | Column view | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1…7</kbd> | Colour labels |
 | <kbd>F6</kbd> / <kbd>F7</kbd> / <kbd>F8</kbd> | Dual pane / viewer / tree | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo |
 | <kbd>></kbd> | Command line | <kbd>F1</kbd> | All commands and keys |

@@ -47,7 +47,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useStore, activeTab, type AppState } from '../state/store'
 import { keyFor, runCommand } from '../state/commands'
-import { resolvedTheme } from '../state/actions'
+import { isFavorite, resolvedTheme } from '../state/actions'
 
 export interface ToolbarButtonDef {
   id: string
@@ -99,7 +99,7 @@ export const TOOLBAR_BUTTONS: ToolbarButtonDef[] = [
   { id: 'sync', group: 'tools', icon: fixed(ArrowLeftRight), label: 'Sync', desc: 'Compare and synchronize the two panes', command: 'Synchronize', disabled: (s) => !s.prefs.dualDisplay },
   { id: 'dupes', group: 'tools', icon: fixed(Files), label: 'Duplicates', desc: 'Find duplicate files by content', command: 'Duplicates' },
   { id: 'sizes', group: 'tools', icon: fixed(Calculator), label: 'Sizes', desc: 'Calculate the size of the selected folders', command: 'GetSizes' },
-  { id: 'fav', group: 'tools', icon: fixed(Star), label: 'Favorite', desc: 'Add or remove the current folder from favorites', command: 'Favorites', active: (s) => s.favorites.some((f) => f.path === tab(s).path) },
+  { id: 'fav', group: 'tools', icon: fixed(Star), label: 'Favorite', desc: 'Add or remove the current folder from favorites', command: 'Favorites', active: (s) => s.favorites.length > 0 && isFavorite(tab(s).path) },
   { id: 'undo', group: 'tools', icon: fixed(Undo2), label: 'Undo', desc: 'Undo the last rename, move, copy or new item', command: 'Undo', disabled: (s) => !s.undoLabel },
   { id: 'newwindow', group: 'app', icon: fixed(AppWindow), label: 'Window', desc: 'Open a new window on this folder', command: 'Go NEWWINDOW' },
   { id: 'cli', group: 'app', icon: fixed(Terminal), label: 'Command', desc: 'Command line for Opal commands, e.g. Select PATTERN=*.jpg', command: 'CLI' },

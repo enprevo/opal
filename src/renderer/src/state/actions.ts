@@ -13,12 +13,26 @@ import {
   updateTab,
   visibleEntries,
   activeColumnDir,
+  type FaytMode,
   type PaneState,
   type TabState
 } from './store'
-import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type Favorite, type UiState, type FileEntry, type FolderFormat, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
+import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type UiState, type FileEntry, type FolderFormat, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
 import { basename, dirname, isAncestor, join, normalize, samePath } from '@shared/paths'
 import { compilePattern } from '@shared/wildcard'
+import {
+  favoriteForKey,
+  favoriteItems,
+  favoriteLabel,
+  findFavorite,
+  insertFavorite,
+  newFavoriteId,
+  removeFavorite as removeFav,
+  updateFavorite,
+  type FavoriteItem,
+  type FavoriteNode,
+  type FavoriteOpenIn
+} from '@shared/favorites'
 import { defaultHotkeys, effectiveHotkeys, hotkeyOverrides, installKeyboard } from './commands'
 
 const api = (): typeof window.opal => window.opal
@@ -778,6 +792,104 @@ export function moveFocus(pane: 0 | 1, delta: number | 'home' | 'end', mods: { s
   }
 }
 
+// ---------------------------------------------------------------------------
+// Find as you type
+// ---------------------------------------------------------------------------
+
+/** Case-insensitive "contains"; wildcards (* ?) when the text has them. */
+export function faytMatcher(text: string): (name: string) => boolean {
+  const t = text.trim()
+  if (/[*?]/.test(t)) {
+    try {
+      const re = compilePattern(t)
+      return (n) => re(n)
+    } catch {
+      return () => false
+    }
+  }
+  const low = t.toLowerCase()
+  return (n) => n.toLowerCase().includes(low)
+}
+
+export function faytMatches(pane: 0 | 1, text: string): FileEntry[] {
+  const s = getState()
+  if (!text.trim() || text.startsWith('/')) return []
+  const match = faytMatcher(text)
+  return visibleEntries(activeTab(pane, s), s.prefs).filter((e) => match(e.name))
+}
+
+function focusEntry(pane: 0 | 1, path: string): void {
+  updateTab(pane, null, (t) => ({ focusPath: path, anchorPath: path, selected: new Set([path]), scrollTick: t.scrollTick + 1 }))
+}
+
+/** Find mode: keep the focused item while it still matches, else the first name starting with the text, else the first containing it. */
+function faytJump(pane: 0 | 1, text: string): void {
+  const matches = faytMatches(pane, text)
+  if (!matches.length) return
+  const tab = activeTab(pane)
+  if (matches.some((m) => m.path === tab.focusPath)) return
+  const low = text.toLowerCase()
+  focusEntry(pane, (matches.find((m) => m.name.toLowerCase().startsWith(low)) ?? matches[0]).path)
+}
+
+export function openFayt(pane: 0 | 1, text: string): void {
+  setActivePane(pane)
+  setState({ fayt: { pane, text, mode: 'find' } })
+  faytJump(pane, text)
+}
+
+export function setFaytText(text: string): void {
+  const f = getState().fayt
+  if (!f) return
+  setState({ fayt: { ...f, text } })
+  if (text.startsWith('/')) return
+  if (f.mode === 'find') faytJump(f.pane, text)
+  else setTabProps(f.pane, { filter: text })
+}
+
+/** Next / previous match (find mode). */
+export function faytStep(dir: 1 | -1): void {
+  const f = getState().fayt
+  if (!f) return
+  if (f.mode !== 'find') {
+    moveFocus(f.pane, dir, { shift: false, ctrl: false })
+    return
+  }
+  const matches = faytMatches(f.pane, f.text)
+  if (!matches.length) return
+  const i = matches.findIndex((m) => m.path === activeTab(f.pane).focusPath)
+  focusEntry(f.pane, matches[(i + dir + matches.length) % matches.length].path)
+}
+
+export async function setFaytMode(mode: FaytMode): Promise<void> {
+  const f = getState().fayt
+  if (!f || f.mode === mode) return
+  setState({ fayt: { ...f, mode } })
+  const tab = activeTab(f.pane)
+  if (mode === 'find') {
+    setTabProps(f.pane, { filter: '' })
+    if (tab.flat) await toggleFlatView(f.pane, false)
+    faytJump(f.pane, f.text)
+    return
+  }
+  // Filter shows only matching items; "deep" also lists every subfolder (Flat View) and filters it.
+  if (mode === 'deep' && !tab.flat) await toggleFlatView(f.pane, true)
+  if (mode === 'filter' && tab.flat) await toggleFlatView(f.pane, false)
+  setTabProps(f.pane, { filter: f.text })
+}
+
+/** Closes the bar. Filters stay when `keep` is set (Enter), and are removed otherwise (Esc). */
+export async function closeFayt(keep = false): Promise<void> {
+  const f = getState().fayt
+  if (!f) return
+  setState({ fayt: null })
+  if (f.mode !== 'find' && !keep) {
+    setTabProps(f.pane, { filter: '' })
+    if (activeTab(f.pane).flat) await toggleFlatView(f.pane, false)
+  }
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-pane="${f.pane}"] .file-scroll`)?.focus())
+}
+
 export function focusByPrefix(pane: 0 | 1, prefix: string): boolean {
   const s = getState()
   const tab = activeTab(pane, s)
@@ -1168,41 +1280,81 @@ export async function undoLast(): Promise<void> {
 }
 
 export function isFavorite(path: string): boolean {
-  return getState().favorites.some((f) => samePath(f.path, path))
+  return favoriteItems(getState().favorites).some((f) => samePath(f.path, path))
 }
 
-function saveFavorites(favorites: Favorite[]): void {
+export function saveFavorites(favorites: FavoriteNode[]): void {
   setState({ favorites })
   void api().setSettings({ favorites })
 }
 
+export function editFavorites(fn: (nodes: FavoriteNode[]) => FavoriteNode[]): void {
+  saveFavorites(fn(getState().favorites))
+}
+
 export function toggleFavorite(path: string = sourceDir()): void {
   const exists = isFavorite(path)
-  saveFavorites(exists ? getState().favorites.filter((f) => !samePath(f.path, path)) : [...getState().favorites, { path }])
+  if (exists) saveFavorites(favoriteItems(getState().favorites).filter((f) => samePath(f.path, path)).reduce((acc, f) => removeFav(acc, f.id), getState().favorites))
+  else saveFavorites([...getState().favorites, { type: 'item', id: newFavoriteId(), path }])
   toast(exists ? 'Removed from favorites' : 'Added to favorites')
 }
 
-/** Removes one favorite entry (the same folder may appear in several groups). */
-export function removeFavorite(fav: Favorite): void {
-  saveFavorites(getState().favorites.filter((f) => f !== fav))
+export function removeFavorite(id: string): void {
+  editFavorites((n) => removeFav(n, id))
 }
 
-export async function renameFavorite(fav: Favorite): Promise<void> {
-  const label = await openDialog<string>('prompt', { title: 'Rename favorite', label: `Name shown for ${fav.path}`, value: fav.label ?? (basename(fav.path) || fav.path), allowEmpty: true })
+/** Opens a favorite: folders in the chosen pane or a new tab, files with their application. */
+export async function openFavorite(fav: FavoriteItem, how: FavoriteOpenIn | 'other' = fav.openIn ?? 'source'): Promise<void> {
+  const s = getState()
+  let isDir = true
+  try {
+    isDir = (await api().stat(fav.path)).isDir
+  } catch {
+    // Unreachable (network share offline…): let navigate report it.
+  }
+  if (!isDir) {
+    void api().open(fav.path)
+    return
+  }
+  const source = s.activePane
+  const other: 0 | 1 = source === 0 ? 1 : 0
+  if (how === 'newtab') {
+    newTab(source, fav.path)
+    return
+  }
+  const pane = (how === 'dest' || how === 'other') && s.prefs.dualDisplay ? other : source
+  await navigate(pane, fav.path)
+  if (pane !== source) setActivePane(pane)
+}
+
+export async function renameFavorite(id: string): Promise<void> {
+  const node = findFavorite(getState().favorites, id)
+  if (!node || node.type === 'separator') return
+  const label = await openDialog<string>('prompt', { title: node.type === 'group' ? 'Rename group' : 'Rename favorite', label: 'Name', value: favoriteLabel(node), allowEmpty: node.type === 'item' })
   if (label === null || label === undefined) return
   const clean = label.trim()
-  saveFavorites(getState().favorites.map((f) => (f === fav ? { ...f, label: clean && clean !== basename(f.path) ? clean : undefined } : f)))
+  if (node.type === 'group') {
+    if (clean) editFavorites((n) => updateFavorite(n, id, { label: clean }))
+  } else editFavorites((n) => updateFavorite(n, id, { label: clean && clean !== basename(node.path) ? clean : undefined }))
 }
 
-export async function moveFavoriteToGroup(fav: Favorite): Promise<void> {
-  const group = await openDialog<string>('prompt', { title: 'Favorite group', label: 'Group name (empty = no group; use " / " for sub-groups)', value: fav.group ?? '', allowEmpty: true })
-  if (group === null || group === undefined) return
-  saveFavorites(getState().favorites.map((f) => (f === fav ? { ...f, group: group.trim() || undefined } : f)))
+export function toggleFavoriteGroup(id: string): void {
+  const node = findFavorite(getState().favorites, id)
+  if (node?.type === 'group') editFavorites((n) => updateFavorite(n, id, { collapsed: !node.collapsed }))
 }
 
-export function toggleFavoriteGroup(group: string): void {
-  const cur = getState().prefs.favoritesCollapsed
-  setPrefs({ favoritesCollapsed: cur.includes(group) ? cur.filter((g) => g !== group) : [...cur, group] })
+export async function newFavoriteGroup(afterId: string | null = null): Promise<void> {
+  const label = await openDialog<string>('prompt', { title: 'New group', label: 'Group name', value: 'New group' })
+  if (!label?.trim()) return
+  editFavorites((n) => insertFavorite(n, { type: 'group', id: newFavoriteId(), label: label.trim(), children: [] }, afterId, 'after'))
+}
+
+/** Navigates to the favorite bound to this key combination; false when none is. */
+export function runFavoriteKey(combo: string): boolean {
+  const fav = favoriteForKey(getState().favorites, combo)
+  if (!fav) return false
+  void openFavorite(fav)
+  return true
 }
 
 export async function dropPaths(paths: string[], dest: string, mods: { ctrl: boolean; shift: boolean }): Promise<void> {

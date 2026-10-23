@@ -5,6 +5,7 @@ import * as A from '../state/actions'
 import { breadcrumbs, basename } from '@shared/paths'
 import { formatSize, pluralize } from '@shared/format'
 import { FileList } from './FileList'
+import { FaytBar } from './FindAsYouType'
 
 export function FileDisplay({ pane }: { pane: 0 | 1 }) {
   const isSource = useStore((s) => s.activePane === pane)
@@ -20,6 +21,7 @@ export function FileDisplay({ pane }: { pane: 0 | 1 }) {
       <TabBar pane={pane} />
       <LocationBar pane={pane} dual={dual} isSource={isSource} />
       <FileList pane={pane} />
+      <FaytBar pane={pane} />
       {showStatus && <DisplayStatus pane={pane} />}
     </div>
   )

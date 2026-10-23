@@ -10,6 +10,8 @@ import { fileTypeLabel } from '@shared/filetypes'
 import { PrefsDialog, SetupDialog } from './Settings'
 import { SemanticDialog, TaggedDialog } from './SemanticSearch'
 import { FileIcon } from './FileIcon'
+import { FavoriteEditDialog, FavoritesManager } from './Favorites'
+import type { FavoriteGroup, FavoriteItem } from '@shared/favorites'
 
 export function DialogHost() {
   const dialog = useStore((s) => s.dialog)
@@ -55,6 +57,12 @@ export function DialogHost() {
       break
     case 'nested':
       body = <NestedDialog {...(p as { op: string; count: number })} />
+      break
+    case 'favoriteEdit':
+      body = <FavoriteEditDialog {...(p as { node: FavoriteItem | FavoriteGroup; focus?: 'key' })} />
+      break
+    case 'favorites':
+      body = <FavoritesManager {...(p as { select?: string })} />
       break
     case 'duplicates':
       body = <DuplicatesDialog {...(p as { root: string })} />

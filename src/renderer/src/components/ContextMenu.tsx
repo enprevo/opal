@@ -71,7 +71,7 @@ export function ContextMenu() {
   const menu = useStore((s) => s.contextMenu)
   useStore((s) => s.hotkeys)
   if (!menu) return null
-  return <MenuPopup x={menu.x} y={menu.y} items={buildItems(menu.pane, menu.target)} root testId="context-menu" />
+  return <MenuPopup x={menu.x} y={menu.y} items={(menu.items as MenuEntry[] | undefined) ?? buildItems(menu.pane, menu.target)} root testId="context-menu" />
 }
 
 function MenuPopup({ x, y, items, root, testId }: { x: number; y: number; items: MenuEntry[]; root?: boolean; testId?: string }) {
@@ -272,7 +272,7 @@ function buildItems(pane: 0 | 1, t: FileEntry | null): MenuEntry[] {
     ...(t.isDir
       ? ([
           { icon: Calculator, label: 'Calculate size', desc: 'Compute the total size of the folder and its contents', hint: keyFor('GetSizes'), action: run('GetSizes') },
-          { icon: Star, label: s.favorites.some((f) => f.path === t.path) ? 'Remove from favorites' : 'Add to favorites', desc: 'Favorites appear at the top of the sidebar', action: () => A.toggleFavorite(t.path) },
+          { icon: Star, label: A.isFavorite(t.path) ? 'Remove from favorites' : 'Add to favorites', desc: 'Favorites appear at the top of the sidebar', action: () => A.toggleFavorite(t.path) },
           { icon: Sparkles, label: 'Index for semantic search', desc: 'Add this folder to the folders whose documents can be searched by meaning', action: () => void A.addSemanticFolder(t.path) }
         ] as MenuEntry[])
       : []),

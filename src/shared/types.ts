@@ -212,17 +212,10 @@ export interface Prefs {
   /** File display zoom (Set FONTSCALE), percent. */
   fontScale: number
   showStatusBar: boolean
-  /** Favorite groups collapsed in the sidebar. */
-  favoritesCollapsed: string[]
 }
 
-export interface Favorite {
-  path: string
-  /** Display name (defaults to the folder name). */
-  label?: string
-  /** Group shown as a collapsible section in the sidebar; nested groups are joined with " / ". */
-  group?: string
-}
+export type { FavoriteNode, FavoriteItem, FavoriteGroup, FavoriteSeparator, FavoriteOpenIn } from './favorites'
+import type { FavoriteNode } from './favorites'
 
 /** Window layout remembered between sessions (sizes in pixels, ratio 0..1). */
 export interface UiState {
@@ -246,7 +239,7 @@ export interface SessionPane {
 
 export interface PersistedState {
   prefs: Prefs
-  favorites: Favorite[]
+  favorites: FavoriteNode[]
   recent: string[]
   labels?: Record<string, string[]>
   labelDefs?: LabelDef[]
@@ -309,8 +302,7 @@ export const DEFAULT_PREFS: Prefs = {
   collapseSubfolders: true,
   keymap: 'standard',
   fontScale: 100,
-  showStatusBar: true,
-  favoritesCollapsed: []
+  showStatusBar: true
 }
 
 export type SemanticMatch = 'meaning' | 'words' | 'name'
