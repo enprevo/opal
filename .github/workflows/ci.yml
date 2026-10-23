@@ -45,9 +45,27 @@ jobs:
 
   # Installers are built on native runners for every OS/CPU pair so that the native AI runtime
   # (onnxruntime-node) and image library (sharp) match the target machine.
+  draft:
+    name: Create draft release
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      # Created once, before the parallel builds, so every installer is attached to the same release.
+      - name: Create the draft release with the notes from CHANGELOG.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v head="## [$version]" 'index($0, "## [") == 1 { if (found) exit; if (index($0, head) == 1) { found = 1; next } } found' CHANGELOG.md > notes.md
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Opal $version" --notes-file notes.md
+
   release:
     name: Release (${{ matrix.name }})
-    needs: test
+    needs: draft
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
