@@ -92,7 +92,10 @@ export async function bootstrap(): Promise<void> {
   api().onWatchChanged((dir) => {
     for (const pane of [0, 1] as const) {
       for (const t of getState().panes[pane].tabs) {
-        if (t.listing && samePath(t.path, dir)) void loadTab(pane, t.id, t.path, { quiet: true })
+        // The changed folder may be the tab's folder or one shown inside it (expanded in place, or a column of the
+        // column view). Linux reports changes only for the folder itself, not for its parent.
+        const shown = samePath(t.path, dir) || [...t.expanded].some((x) => samePath(x, dir)) || Object.keys(t.children).some((x) => samePath(x, dir))
+        if (t.listing && shown) void loadTab(pane, t.id, t.path, { quiet: true })
       }
     }
   })
@@ -236,6 +239,7 @@ function updateWatches(): void {
     const t = activeTab(pane, s)
     if (t.listing) dirs.add(t.listing.path)
     if (treeMode(t, s.prefs)) for (const d of [...t.expanded].slice(0, 64)) dirs.add(d)
+    if (t.viewMode === 'columns') for (const d of columnDirs(t).slice(0, 16)) dirs.add(d)
   }
   const key = [...dirs].sort().join('|')
   if (key === lastWatchKey) return
