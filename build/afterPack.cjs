@@ -15,7 +15,13 @@ exports.default = async function afterPack(context) {
   if (!fs.existsSync(bin) || arch === 'universal') return
   for (const os of fs.readdirSync(bin)) {
     for (const cpu of fs.readdirSync(path.join(bin, os))) {
-      if (os !== platform || cpu !== arch) fs.rmSync(path.join(bin, os, cpu), { recursive: true, force: true })
+      const dir = path.join(bin, os, cpu)
+      if (os !== platform || cpu !== arch) {
+        fs.rmSync(dir, { recursive: true, force: true })
+        continue
+      }
+      // GPU execution providers (CUDA/TensorRT, ~230 MB on Linux x64) are never used: Opal runs on the CPU.
+      for (const f of fs.readdirSync(dir)) if (/providers_(cuda|tensorrt)/i.test(f)) fs.rmSync(path.join(dir, f), { force: true })
     }
   }
 }
