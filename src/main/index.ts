@@ -316,7 +316,8 @@ function registerIpc(): void {
     const cached = iconCache.get(key)
     if (cached !== undefined) return cached
     try {
-      const img = await app.getFileIcon(p, { size })
+      // "large" is not supported on macOS (Electron aborts): 'normal' is the biggest native icon there.
+      const img = await app.getFileIcon(p, { size: process.platform === 'darwin' && size === 'large' ? 'normal' : size })
       const url = img.isEmpty() ? '' : img.toDataURL()
       iconCache.set(key, url)
       return url
@@ -475,6 +476,10 @@ ipcMain.on('edit:native', (e, action: string) => {
   const wc = e.sender as unknown as Record<string, () => void>
   wc[action]()
 })
+
+// Leave a trace in the log (and in test output) when a process of the app dies.
+app.on('render-process-gone', (_e, _wc, details) => console.error('[opal] renderer process gone:', details.reason, details.exitCode))
+app.on('child-process-gone', (_e, details) => console.error('[opal] child process gone:', details.type, details.reason, details.exitCode, details.serviceName ?? ''))
 
 app.whenReady().then(async () => {
   await settings.load()

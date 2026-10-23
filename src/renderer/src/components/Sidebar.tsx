@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ChevronDown, Star, X, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock } from 'lucide-react'
+import { ChevronRight, ChevronDown, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock } from 'lucide-react'
 import { activeTab, getState, openDialog, useStore } from '../state/store'
 import * as A from '../state/actions'
-import type { Favorite, FileEntry, RootInfo } from '@shared/types'
+import type { FileEntry, RootInfo } from '@shared/types'
+import { FavoritesSection } from './Favorites'
 import { basename, dirname, isAncestor, samePath } from '@shared/paths'
 import { readDragPaths, focusList } from './FileDisplay'
-import { keyFor } from '../state/commands'
 
 interface NodeData {
   children: FileEntry[] | null
@@ -38,7 +38,7 @@ export function Sidebar() {
 
   return (
     <div className="sidebar">
-      <FavoritesSection pane={pane} currentPath={currentPath} />
+      <FavoritesSection currentPath={currentPath} />
       <div className="sb-section">
         <div className="sb-title">Places</div>
         {places.map((r) => (
@@ -64,115 +64,6 @@ export function Sidebar() {
         <div className="sb-title">Folders</div>
         <FolderTree roots={treeRoots} currentPath={currentPath} />
       </div>
-    </div>
-  )
-}
-
-function FavoriteRow({ fav, pane, currentPath, indent, onMenu }: { fav: Favorite; pane: 0 | 1; currentPath: string; indent: boolean; onMenu: (e: React.MouseEvent, f: Favorite) => void }) {
-  const name = fav.label || basename(fav.path) || fav.path
-  return (
-    <div
-      className={`sb-item${indent ? ' sb-nested' : ''}${samePath(fav.path, currentPath) ? ' current' : ''}`}
-      title={fav.path}
-      data-testid="favorite-item"
-      onClick={() => void A.navigate(pane, fav.path)}
-      onContextMenu={(e) => onMenu(e, fav)}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault()
-        const paths = readDragPaths(e.dataTransfer)
-        if (paths.length) void A.dropPaths(paths, fav.path, { ctrl: e.ctrlKey, shift: e.shiftKey })
-      }}
-    >
-      <Star size={13} className="fav-star" />
-      <span className="sb-label">{name}</span>
-      <button
-        className="sb-remove"
-        title="Remove favorite"
-        onClick={(e) => {
-          e.stopPropagation()
-          A.removeFavorite(fav)
-        }}
-      >
-        <X size={11} />
-      </button>
-    </div>
-  )
-}
-
-/** Favorites: ungrouped first, then collapsible groups (right-click a favorite to rename or regroup it). */
-function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: string }) {
-  const favorites = useStore((s) => s.favorites)
-  const collapsed = useStore((s) => s.prefs.favoritesCollapsed)
-  const [menu, setMenu] = useState<{ x: number; y: number; fav: Favorite } | null>(null)
-  const groups = useMemo(() => {
-    const map = new Map<string, Favorite[]>()
-    for (const f of favorites) {
-      const g = f.group ?? ''
-      if (!map.has(g)) map.set(g, [])
-      map.get(g)!.push(f)
-    }
-    return map
-  }, [favorites])
-  useEffect(() => {
-    if (!menu) return
-    const close = (): void => setMenu(null)
-    window.addEventListener('mousedown', close)
-    window.addEventListener('blur', close)
-    return () => {
-      window.removeEventListener('mousedown', close)
-      window.removeEventListener('blur', close)
-    }
-  }, [menu])
-  const onMenu = (e: React.MouseEvent, fav: Favorite): void => {
-    e.preventDefault()
-    setMenu({ x: e.clientX, y: e.clientY, fav })
-  }
-  const act = (fn: () => void) => (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setMenu(null)
-    fn()
-  }
-  return (
-    <div className="sb-section" data-testid="favorites-section">
-      <div className="sb-title">Favorites</div>
-      {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder</div>}
-      {(groups.get('') ?? []).map((f, i) => (
-        <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} onMenu={onMenu} />
-      ))}
-      {[...groups.entries()]
-        .filter(([g]) => g)
-        .map(([g, list]) => {
-          const closed = collapsed.includes(g)
-          return (
-            <div key={g} data-testid="favorite-group">
-              <div className="sb-item sb-group" title={g} onClick={() => A.toggleFavoriteGroup(g)}>
-                {closed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <Folder size={13} />
-                <span className="sb-label">{g}</span>
-                <span className="sb-count">{list.length}</span>
-              </div>
-              {!closed && list.map((f, i) => <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent onMenu={onMenu} />)}
-            </div>
-          )
-        })}
-      {menu && (
-        <div className="context-menu" style={{ left: menu.x, top: menu.y, position: 'fixed' }} data-testid="favorite-menu" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="cm-item" onClick={act(() => void A.navigate(pane === 0 ? 1 : 0, menu.fav.path))}>
-            <span className="cm-label">Open in the other pane</span>
-          </div>
-          <div className="cm-item" data-testid="favorite-rename" onClick={act(() => void A.renameFavorite(menu.fav))}>
-            <span className="cm-label">Rename…</span>
-          </div>
-          <div className="cm-item" onClick={act(() => void A.moveFavoriteToGroup(menu.fav))}>
-            <span className="cm-label">Move to group…</span>
-          </div>
-          <div className="cm-sep" />
-          <div className="cm-item danger" onClick={act(() => A.removeFavorite(menu.fav))}>
-            <span className="cm-label">Remove from favorites</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

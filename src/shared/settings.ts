@@ -3,7 +3,10 @@
  * a file exported on another computer (possibly another OS or an older version): unknown keys are dropped,
  * values of the wrong type fall back to defaults, and older shapes are migrated.
  */
-import { DEFAULT_PREFS, type Favorite, type LabelDef, type PersistedState, type Prefs, type UiState } from './types'
+import { DEFAULT_PREFS, type LabelDef, type PersistedState, type Prefs, type UiState } from './types'
+import { normalizeFavorites } from './favorites'
+
+export { normalizeFavorites }
 
 export const SETTINGS_FORMAT = 'opal-settings'
 
@@ -43,31 +46,6 @@ export function normalizePrefs(raw: unknown): Prefs {
   return out
 }
 
-/** Accepts the current shape and the older plain list of paths; drops duplicates and invalid entries. */
-export function normalizeFavorites(raw: unknown): Favorite[] {
-  if (!Array.isArray(raw)) return []
-  const seen = new Set<string>()
-  const out: Favorite[] = []
-  for (const item of raw) {
-    const fav: Favorite | null =
-      typeof item === 'string'
-        ? { path: item }
-        : isObj(item) && typeof item.path === 'string'
-          ? {
-              path: item.path,
-              ...(typeof item.label === 'string' && item.label.trim() ? { label: item.label.trim() } : {}),
-              ...(typeof item.group === 'string' && item.group.trim() ? { group: item.group.trim() } : {})
-            }
-          : null
-    if (!fav || !fav.path.trim()) continue
-    const key = `${fav.group ?? ''}\u0000${fav.path.toLowerCase()}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(fav)
-  }
-  return out
-}
-
 function normalizeLabelDefs(raw: unknown): LabelDef[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const defs = raw.filter((d): d is LabelDef => isObj(d) && typeof d.id === 'string' && typeof d.name === 'string' && typeof d.color === 'string')
@@ -104,7 +82,8 @@ export function normalizeState(raw: unknown): PersistedState {
   const r = isObj(raw) ? raw : {}
   const state: PersistedState = {
     prefs: normalizePrefs(r.prefs),
-    favorites: normalizeFavorites(r.favorites),
+    // Older versions kept collapsed favorite groups in the preferences.
+    favorites: normalizeFavorites(r.favorites, isObj(r.prefs) ? strings(r.prefs.favoritesCollapsed) : []),
     recent: strings(r.recent).slice(0, 50)
   }
   if (isObj(r.labels)) {

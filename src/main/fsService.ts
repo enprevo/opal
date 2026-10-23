@@ -389,6 +389,21 @@ export async function fileId(p: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * Identity of a file for undo: device + inode + creation time. Linux reuses the inode number of a deleted file
+ * at once, so the inode alone could mistake a new, unrelated file for the one an operation created (and undo
+ * would delete it). Where the file system has no creation time, the metadata change time is used instead.
+ */
+export async function undoIdentity(p: string): Promise<string | undefined> {
+  try {
+    const st = await fsp.lstat(p, { bigint: true })
+    const born = st.birthtimeNs > 0n ? st.birthtimeNs : st.ctimeNs
+    return `${st.dev}:${st.ino}:${born}`
+  } catch {
+    return undefined
+  }
+}
+
 async function sameEntry(a: string, b: string): Promise<boolean> {
   const [x, y] = await Promise.all([fileId(a), fileId(b)])
   return x !== undefined && x === y && !x.endsWith(':0')
@@ -863,7 +878,7 @@ export class UndoManager {
 
   /** Records an operation together with the identity of what it produced, so undo never touches a different file. */
   async push(entry: UndoEntry): Promise<void> {
-    const ids = await Promise.all(UndoManager.targets(entry).map(fileId))
+    const ids = await Promise.all(UndoManager.targets(entry).map(undoIdentity))
     this.stack.push({ entry, ids })
     if (this.stack.length > 50) this.stack.shift()
   }
@@ -886,7 +901,7 @@ export class UndoManager {
     const { entry: top, ids } = rec
     const errors: string[] = []
     const unchanged = async (p: string, i: number): Promise<boolean> => {
-      const now = await fileId(p)
+      const now = await undoIdentity(p)
       if (ids[i] !== undefined && now !== ids[i]) {
         errors.push(`${path.basename(p)}: changed since the operation, not undone`)
         return false

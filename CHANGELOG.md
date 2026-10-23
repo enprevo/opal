@@ -3,9 +3,36 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-10-23
+
+First public release: everything below, plus:
+
+### Favorites
+
+- Favorites are a tree: nested groups, separators, folders and files.
+- Right-click a favorite or a group to edit it, rename it, give it a text or background colour, an icon or an emoji,
+  move it, or add groups and separators.
+- **Shortcut keys**: assign a key to a favorite (a single letter such as <kbd>P</kbd>, or a combination) and press it in
+  the file list to go there. Keys are shown next to the favorites.
+- **Organize favorites**: a manager to reorder by drag and drop (also into groups), edit names, paths, keys, icons and
+  colours, sort groups, and choose where each favorite opens (active pane, other pane, new tab). Cancel discards.
+- Drag favorites in the sidebar to reorder them; drop folders on the Favorites title to add them.
+
+### Find as you type
+
+- Typing in a file list opens a search bar: the matching part of names is highlighted, <kbd>↑</kbd>/<kbd>↓</kbd> go
+  to the next match, <kbd>Enter</kbd> opens it. <kbd>Tab</kbd> switches between Find, Filter (show only matches) and
+  Subfolders (search the whole branch); <kbd>Esc</kbd> restores the view.
+- Type <kbd>/</kbd> to jump to a favorite (by name, group or path), a recent folder or any path.
+
+### Previews
+
+- Source code is shown with syntax colours in Quick Look and in the viewer pane (40 languages), and code blocks in
+  Markdown files are coloured too.
+
 ## [0.2.0] — 2026-10-23
 
-First public release.
+Internal preview.
 
 ### File management
 
@@ -57,4 +84,4 @@ First public release.
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+digit and Option/AltGr combinations; Ubuntu AppImages start under the AppArmor
   user-namespace restriction; "Open terminal here" finds the terminal of each desktop.
 
-[0.2.0]: https://github.com/enprevo/opal/releases/tag/v0.2.0
+[0.3.0]: https://github.com/enprevo/opal/releases/tag/v0.3.0

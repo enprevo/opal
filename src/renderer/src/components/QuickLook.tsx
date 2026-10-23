@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { marked } from 'marked'
+import { Marked } from 'marked'
+import { highlightBlock, highlightLines, languageFor, languageName } from '../highlight'
 import { X, Maximize2, Minimize2, ExternalLink, FolderSearch, ChevronLeft, ChevronRight, FileArchive } from 'lucide-react'
 import { activeTab, findVisible, getState, setState, useStore, visibleEntries } from '../state/store'
 import * as A from '../state/actions'
@@ -9,6 +10,18 @@ import { fileTypeLabel, previewKindForExt } from '@shared/filetypes'
 import { FileIcon, fileUrl } from './FileIcon'
 
 const MARKDOWN = new Set(['md', 'markdown', 'mdx'])
+
+/** Markdown renderer with syntax-coloured code blocks. */
+const markdownRenderer = new Marked({
+  gfm: true,
+  async: false,
+  renderer: {
+    code({ text, lang }) {
+      const l = (lang ?? '').trim().split(/\s+/)[0].toLowerCase()
+      return `<pre class="ql-md-code"><code class="hljs">${highlightBlock(text, l || undefined)}</code></pre>\n`
+    }
+  }
+})
 const ZIPLIKE = new Set(['zip', 'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp', 'jar', 'apk', 'epub'])
 
 /** Removes scripts, event handlers and javascript: URLs from rendered Markdown. */
@@ -111,7 +124,7 @@ function QuickLookBody({ entry }: { entry: FileEntry }) {
 
   const markdown = useMemo(() => {
     if (!preview?.text || !MARKDOWN.has(ext)) return null
-    return sanitizeHtml(marked.parse(preview.text, { async: false, gfm: true }) as string)
+    return sanitizeHtml(markdownRenderer.parse(preview.text) as string)
   }, [preview, ext])
 
   const info = (
@@ -170,20 +183,7 @@ function QuickLookBody({ entry }: { entry: FileEntry }) {
   if (!preview) return <div className="ql-body ql-center muted">Loading…</div>
   if (markdown !== null) return <div className="ql-body ql-scroll ql-markdown" data-testid="ql-markdown" dangerouslySetInnerHTML={{ __html: markdown }} />
   if (preview.kind === 'text') {
-    const lines = (preview.text ?? '').split('\n')
-    return (
-      <div className="ql-body ql-scroll">
-        <pre className="ql-code" data-testid="ql-text">
-          {lines.slice(0, 5000).map((l, i) => (
-            <div key={i} className="ql-line">
-              <span className="ql-ln">{i + 1}</span>
-              <span>{l || ' '}</span>
-            </div>
-          ))}
-          {preview.truncated && <div className="muted">… truncated</div>}
-        </pre>
-      </div>
-    )
+    return <CodeView text={preview.text ?? ''} name={entry.name} truncated={!!preview.truncated} />
   }
   return (
     <div className="ql-body ql-center">
@@ -191,6 +191,31 @@ function QuickLookBody({ entry }: { entry: FileEntry }) {
       <div className="ql-big-name">{entry.name}</div>
       {info}
       <div className="muted">{preview.kind === 'error' ? preview.message : 'No preview available for this file type'}</div>
+    </div>
+  )
+}
+
+/** Text with line numbers, syntax-coloured when the file type is known (C, Python, TypeScript, JSON, …). */
+function CodeView({ text, name, truncated }: { text: string; name: string; truncated: boolean }) {
+  const lang = languageFor(name)
+  const html = useMemo(() => highlightLines(text, name, lang), [text, name, lang])
+  const lines = html ?? text.split('\n')
+  return (
+    <div className="ql-body ql-scroll ql-code-wrap">
+      {lang && html && (
+        <span className="ql-lang" data-testid="ql-lang">
+          {languageName(lang)}
+        </span>
+      )}
+      <pre className={`ql-code${html ? ' hljs' : ''}`} data-testid="ql-text">
+        {lines.slice(0, 5000).map((l, i) => (
+          <div key={i} className="ql-line">
+            <span className="ql-ln">{i + 1}</span>
+            {html ? <span dangerouslySetInnerHTML={{ __html: l || ' ' }} /> : <span>{l || ' '}</span>}
+          </div>
+        ))}
+        {truncated && <div className="muted">… truncated</div>}
+      </pre>
     </div>
   )
 }

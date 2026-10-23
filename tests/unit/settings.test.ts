@@ -22,11 +22,23 @@ describe('settings normalisation', () => {
     expect(normalizeState({ prefs: { keymap: 'something-old' } }).prefs.keymap).toBe('standard')
     expect(normalizeState({ prefs: { keymap: 'commander' } }).prefs.keymap).toBe('commander')
   })
-  it('migrates plain favorite paths and keeps labels and groups', () => {
-    expect(normalizeFavorites(['/a', { path: '/b', label: ' Bee ', group: 'Work / Clients' }, { path: '' }, 7, '/a'])).toEqual([
-      { path: '/a' },
-      { path: '/b', label: 'Bee', group: 'Work / Clients' }
+  it('migrates plain paths and the flat "Parent / Child" groups into a tree', () => {
+    const tree = normalizeFavorites(['/a', { path: '/b', label: ' Bee ', group: 'Work / Clients' }, { path: '' }, 7, '/a', { path: '/c', group: 'Work' }], ['Work / Clients'])
+    const strip = (n: unknown): unknown => JSON.parse(JSON.stringify(n, (k, v) => (k === 'id' ? undefined : v)))
+    expect(strip(tree)).toEqual([
+      { type: 'item', path: '/a' },
+      {
+        type: 'group',
+        label: 'Work',
+        children: [{ type: 'group', label: 'Clients', collapsed: true, children: [{ type: 'item', path: '/b', label: 'Bee' }] }, { type: 'item', path: '/c' }]
+      }
     ])
+    expect(new Set([...JSON.stringify(tree).matchAll(/"id":"([^"]+)"/g)].map((m) => m[1])).size).toBe(5)
+  })
+  it('takes collapsed groups from older preferences', () => {
+    const st = normalizeState({ prefs: { favoritesCollapsed: ['Jobs'] }, favorites: [{ path: '/x', group: 'Jobs' }] })
+    expect(st.favorites[0]).toMatchObject({ type: 'group', label: 'Jobs', collapsed: true })
+    expect('favoritesCollapsed' in st.prefs).toBe(false)
   })
   it('clamps window layout values', () => {
     const st = normalizeState({ ui: { sidebarWidth: 9999, paneRatio: 0.01, columnWidths: { name: 300, size: -5 } } })
@@ -37,7 +49,7 @@ describe('settings normalisation', () => {
 describe('export and import', () => {
   const base = normalizeState({
     prefs: { theme: 'light', accent: '#ff375f' },
-    favorites: [{ path: 'C:\\Work', label: 'Work', group: 'Jobs' }],
+    favorites: [{ type: 'group', id: 'g', label: 'Jobs', children: [{ type: 'item', id: 'w', path: 'C:\\Work', label: 'Work', key: 'W', color: '#ff5f57', icon: 'lucide:Briefcase' }] }],
     recent: ['C:\\Temp'],
     hotkeys: { 'Ctrl+J': 'Go C:\\Work' },
     labels: { 'C:\\Work\\a.txt': ['red'] },
@@ -51,7 +63,7 @@ describe('export and import', () => {
     expect(out.platform).toBe('win32')
     expect('session' in out).toBe(false)
     expect('recent' in out).toBe(false)
-    expect(out.favorites[0].label).toBe('Work')
+    expect(out.favorites[0]).toMatchObject({ type: 'group', children: [{ label: 'Work', key: 'W', color: '#ff5f57', icon: 'lucide:Briefcase' }] })
     expect(out.renamePresets?.Dates).toBeTruthy()
   })
   it('imports over the current state, keeping this computer’s tabs and recent folders', () => {
@@ -92,19 +104,19 @@ describe('settings file safety', () => {
     const file = path.join(dir, 'opal-settings.json')
     const s = new SettingsStore(file)
     await s.load()
-    s.update({ favorites: [{ path: '/first' }] })
+    s.update({ favorites: [{ type: 'item', id: '1', path: '/first' }] })
     await s.flush()
-    s.update({ favorites: [{ path: '/second' }] })
+    s.update({ favorites: [{ type: 'item', id: '2', path: '/second' }] })
     await s.flush()
     // A second session backs up the last good file before writing.
     const s2 = new SettingsStore(file)
     await s2.load()
-    s2.update({ favorites: [{ path: '/third' }] })
+    s2.update({ favorites: [{ type: 'item', id: '3', path: '/third' }] })
     await s2.flush()
     await fsp.writeFile(file, '{ broken json')
     const s3 = new SettingsStore(file)
     const st = await s3.load()
-    expect(st.favorites).toEqual([{ path: '/second' }])
+    expect(st.favorites).toEqual([{ type: 'item', id: '2', path: '/second' }])
     const files = await fsp.readdir(dir)
     expect(files.some((f) => f.includes('.corrupt-'))).toBe(true)
     await fsp.rm(dir, { recursive: true, force: true })

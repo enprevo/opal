@@ -84,7 +84,8 @@ test('every setting survives export → new profile → import', async () => {
   expect(Object.keys(st.renamePresets ?? {})).toEqual(['Date prefix'])
   expect(Object.values(st.labels ?? {})).toEqual([['red']])
   // The imported custom key works.
-  await pb.locator('[data-testid="list-0"]').click({ position: { x: 300, y: 300 } })
+  // The imported layout makes the left pane narrow on small screens (CI): click near its left edge.
+  await pb.locator('[data-testid="list-0"]').click({ position: { x: 20, y: 300 } })
   await pb.keyboard.press('ControlOrMeta+J')
   await expect(pb.locator('html')).toHaveAttribute('data-theme', 'dark')
   // Settings were written to disk, not only kept in memory.

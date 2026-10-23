@@ -4,7 +4,7 @@ import {
   DEFAULT_LABELS,
   DEFAULT_PREFS,
   type DirListing,
-  type Favorite,
+  type FavoriteNode,
   type UiState,
   type FileEntry,
   type FolderFormat,
@@ -79,7 +79,7 @@ export interface AppState {
   ready: boolean
   info: AppInfo
   prefs: Prefs
-  favorites: Favorite[]
+  favorites: FavoriteNode[]
   recent: string[]
   hotkeys: Record<string, string>
   /** Pane sizes and column widths (persisted). */
@@ -91,7 +91,8 @@ export interface AppState {
   clipboard: { paths: string[]; cut: boolean } | null
   jobs: Record<string, JobProgress>
   dialog: DialogRequest | null
-  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null } | null
+  /** File context menu, or a menu with its own items (favorites, …). */
+  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null; items?: unknown[] } | null
   toasts: Toast[]
   undoLabel: string
   cliOpen: boolean
@@ -109,7 +110,11 @@ export interface AppState {
   /** Quick Look (Space) preview overlay. */
   quickLook: boolean
   semantic: SemanticStatus | null
+  /** Find-as-you-type bar of a pane: jump to matches, filter them, or search the subfolders too. */
+  fayt: { pane: 0 | 1; text: string; mode: FaytMode } | null
 }
+
+export type FaytMode = 'find' | 'filter' | 'deep'
 
 let tabCounter = 0
 
@@ -151,6 +156,7 @@ const initial: AppState = {
   folderFormats: {},
   quickLook: false,
   semantic: null,
+  fayt: null,
   prefs: { ...DEFAULT_PREFS },
   favorites: [],
   recent: [],
