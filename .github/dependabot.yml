@@ -8,6 +8,13 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    ignore:
+      # Major versions that need code changes: upgraded by hand, not proposed every week.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+      # Typings follow the Node.js version used to build (see .nvmrc), not the newest one.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:
