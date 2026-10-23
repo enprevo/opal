@@ -31,6 +31,8 @@ export async function launch(setup?: (left: string, right: string) => Promise<vo
     args: [path.join(__dirname, '../../out/main/index.js'), ...(process.platform === 'linux' && process.env.CI ? ['--no-sandbox'] : [])],
     env: { ...process.env, OPAL_USER_DATA: userData, OPAL_START_PATHS: `${left}|${right}`, OPAL_EMBEDDER: 'hash', OPAL_NO_SETUP: '1', ...extraEnv } as Record<string, string>
   })
+  // On CI, show what Electron prints on stderr (crashes, failed native calls) next to the failing test.
+  if (process.env.CI) app.process().stderr?.on('data', (d: Buffer) => process.stderr.write(`[electron] ${d}`))
   const page = await app.firstWindow()
   await page.waitForSelector('[data-testid="list-0"]')
   await page.waitForFunction(() => document.querySelectorAll('[data-testid="list-0"] .item').length > 0 || document.querySelector('[data-testid="list-0"] .list-message'))
