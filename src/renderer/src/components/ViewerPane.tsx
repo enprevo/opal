@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { activeTab, findVisible, useStore } from '../state/store'
 import type { Preview } from '@shared/types'
 import { formatDate, formatSize } from '@shared/format'
 import { fileTypeLabel } from '@shared/filetypes'
+import { languageFor } from '@shared/language'
+import { highlightLines } from '../highlight'
 import { FileIcon, fileUrl } from './FileIcon'
 
 export function ViewerPane() {
@@ -25,6 +27,12 @@ export function ViewerPane() {
       clearTimeout(t)
     }
   }, [entry?.path, entry?.mtime])
+
+  const highlighted = useMemo(() => {
+    if (preview?.kind !== 'text' || !preview.text || !entry) return null
+    const lines = highlightLines(preview.text, languageFor(entry.name, entry.ext, preview.text.slice(0, 200).split('\n', 1)[0]))
+    return lines ? lines.join('\n') : null
+  }, [preview, entry?.name, entry?.ext])
 
   if (!entry) return <div className="viewer empty">No file selected</div>
 
@@ -50,7 +58,7 @@ export function ViewerPane() {
         {preview?.kind === 'pdf' && <iframe className="viewer-pdf" src={fileUrl(entry.path)} title="pdf" />}
         {preview?.kind === 'text' && (
           <pre className="viewer-text" data-testid="viewer-text">
-            {preview.text}
+            {highlighted !== null ? <code dangerouslySetInnerHTML={{ __html: highlighted }} /> : preview.text}
             {preview.truncated && '\n\n… (truncated)'}
           </pre>
         )}

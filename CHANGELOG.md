@@ -16,6 +16,14 @@ All notable changes to this project are documented here. The format follows
 - Folder colors are shown in the path bar, the folder tree, Favorites and every file view, and are kept when the
   folder is renamed in Opal. They are part of exported settings.
 
+### Previews
+
+- Source code in Quick Look and the viewer pane is shown with syntax highlighting, chosen by file name or extension
+  (JavaScript/TypeScript, Python, C/C++, C#, Java, Go, Rust, Ruby, PHP, Kotlin, Swift, Lua, shell, PowerShell, batch,
+  SQL, JSON, YAML, TOML/INI, HTML/XML, CSS/SCSS/Less, Makefile, Dockerfile, CMake, Arduino, diff…) or a `#!` line.
+  Fenced code blocks in rendered Markdown are colored too. Colors follow the dark and light themes; plain text and
+  very large files are shown as before.
+
 ### Linux
 
 - The window and the dock now recognise the installed app (matching `desktopName`), so Opal gets its own icon, can be

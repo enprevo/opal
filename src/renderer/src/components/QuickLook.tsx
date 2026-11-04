@@ -6,6 +6,8 @@ import * as A from '../state/actions'
 import type { FileEntry, Preview } from '@shared/types'
 import { formatDate, formatSize } from '@shared/format'
 import { fileTypeLabel, previewKindForExt } from '@shared/filetypes'
+import { languageFor } from '@shared/language'
+import { highlightLines, highlightMarkdownHtml } from '../highlight'
 import { FileIcon, fileUrl } from './FileIcon'
 
 const MARKDOWN = new Set(['md', 'markdown', 'mdx'])
@@ -111,8 +113,14 @@ function QuickLookBody({ entry }: { entry: FileEntry }) {
 
   const markdown = useMemo(() => {
     if (!preview?.text || !MARKDOWN.has(ext)) return null
-    return sanitizeHtml(marked.parse(preview.text, { async: false, gfm: true }) as string)
+    return highlightMarkdownHtml(sanitizeHtml(marked.parse(preview.text, { async: false, gfm: true }) as string))
   }, [preview, ext])
+
+  // Source code is shown with syntax colours, chosen by file name or extension (or a #! line).
+  const highlighted = useMemo(() => {
+    if (preview?.kind !== 'text' || !preview.text || MARKDOWN.has(ext)) return null
+    return highlightLines(preview.text, languageFor(entry.name, ext, preview.text.slice(0, 200).split('\n', 1)[0]))
+  }, [preview, ext, entry.name])
 
   const info = (
     <div className="ql-info">
@@ -173,11 +181,11 @@ function QuickLookBody({ entry }: { entry: FileEntry }) {
     const lines = (preview.text ?? '').split('\n')
     return (
       <div className="ql-body ql-scroll">
-        <pre className="ql-code" data-testid="ql-text">
+        <pre className={`ql-code${highlighted ? ' highlighted' : ''}`} data-testid="ql-text">
           {lines.slice(0, 5000).map((l, i) => (
             <div key={i} className="ql-line">
               <span className="ql-ln">{i + 1}</span>
-              <span>{l || ' '}</span>
+              {highlighted?.[i] ? <span dangerouslySetInnerHTML={{ __html: highlighted[i] }} /> : <span>{l || ' '}</span>}
             </div>
           ))}
           {preview.truncated && <div className="muted">… truncated</div>}
