@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { SettingsStore } from '../../src/main/settings'
-import { fromImport, normalizeFavorites, normalizeState, toExport } from '../../src/shared/settings'
+import { fromImport, isFavoriteShortcut, normalizeFavorites, normalizeFolderStyles, normalizeState, toExport } from '../../src/shared/settings'
 import { DEFAULT_PREFS } from '../../src/shared/types'
 import { effectiveHotkeys, hotkeyOverrides } from '../../src/renderer/src/state/commands'
 
@@ -117,5 +117,47 @@ describe('settings file safety', () => {
     await Promise.all(Array.from({ length: 20 }, (_, i) => (s.update({ recent: [`/r${i}`] }), s.flush())))
     expect(JSON.parse(await fsp.readFile(file, 'utf8')).recent).toEqual(['/r19'])
     await fsp.rm(dir, { recursive: true, force: true })
+  })
+})
+
+describe('favorite shortcuts', () => {
+  it('accepts function keys and combinations with Ctrl or Alt only', () => {
+    for (const ok of ['Ctrl+Alt+1', 'Alt+D', 'Ctrl+Shift+F', 'F5', 'Shift+F9', 'Ctrl++']) expect(isFavoriteShortcut(ok), ok).toBe(true)
+    for (const bad of ['', 'A', 'Shift+A', 'Enter', 'Tab', 'Ctrl', 'Ctrl+', 'Alt', 'Shift+Tab', 'F25', 7, null]) expect(isFavoriteShortcut(bad), String(bad)).toBe(false)
+  })
+  it('keeps a valid shortcut with its favorite', () => {
+    expect(normalizeFavorites([{ path: '/a', shortcut: ' Ctrl+Alt+1 ' }])).toEqual([{ path: '/a', shortcut: 'Ctrl+Alt+1' }])
+  })
+  it('drops shortcuts that would hijack typing', () => {
+    expect(normalizeFavorites([{ path: '/a', shortcut: 'A' }, { path: '/b', shortcut: 'Shift+Z' }])).toEqual([{ path: '/a' }, { path: '/b' }])
+  })
+  it('gives a key combination to one folder only: the first favorite keeps it', () => {
+    expect(normalizeFavorites([{ path: '/a', shortcut: 'F5' }, { path: '/b', shortcut: 'F5' }, { path: '/A', group: 'g', shortcut: 'F5' }])).toEqual([
+      { path: '/a', shortcut: 'F5' },
+      { path: '/b' },
+      { path: '/A', group: 'g', shortcut: 'F5' }
+    ])
+  })
+})
+
+describe('folder colors', () => {
+  it('keeps valid colors, lower-cased, and drops everything else', () => {
+    expect(
+      normalizeFolderStyles({
+        '/a': { color: '#EF5350', bg: '#4a8cf7' },
+        '/b': { color: 'red', bg: '#12345' },
+        '/c': { color: '#43b86a', extra: 1 },
+        '/d': 'x',
+        '': { color: '#000000' }
+      })
+    ).toEqual({ '/a': { color: '#ef5350', bg: '#4a8cf7' }, '/c': { color: '#43b86a' } })
+  })
+  it('is absent when the file has none, and survives normalizeState and export → import', () => {
+    expect(normalizeState({}).folderStyles).toBeUndefined()
+    const st = normalizeState({ prefs: {}, folderStyles: { '/a': { bg: '#26b5a5' } }, favorites: [{ path: '/a', shortcut: 'Ctrl+Alt+9' }] })
+    const exported = JSON.parse(JSON.stringify(toExport(st, '1.0.0', 'linux')))
+    const back = fromImport(exported, normalizeState({}))
+    expect(back.folderStyles).toEqual({ '/a': { bg: '#26b5a5' } })
+    expect(back.favorites).toEqual([{ path: '/a', shortcut: 'Ctrl+Alt+9' }])
   })
 })

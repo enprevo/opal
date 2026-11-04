@@ -2777,3 +2777,85 @@ button.link:hover {
 .sb-group .sb-label {
   font-weight: 600;
 }
+
+/* Folder colours: the row background comes from --tint (a folder's "Row background"); selection and drop targets stay visible. */
+.tinted.tinted:not(.selected):not(.current):not(.path-selected):not(.drop-target) {
+  background: color-mix(in srgb, var(--tint) 24%, transparent);
+}
+
+.tinted.tinted:not(.selected):not(.current):not(.path-selected):not(.drop-target):hover {
+  background: color-mix(in srgb, var(--tint) 38%, transparent);
+}
+
+.crumb.tinted {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 55%, transparent);
+}
+
+.sb-key {
+  font: 10px ui-monospace, Consolas, Menlo, monospace;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.sb-item:hover .sb-key {
+  display: none;
+}
+
+/* Folder customize dialog */
+.fo-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  outline: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+  outline-offset: 0;
+  cursor: pointer;
+}
+
+.swatch.on {
+  border-color: var(--bg2);
+  outline: 2px solid var(--accent);
+}
+
+.swatch.none {
+  background: linear-gradient(135deg, transparent 46%, var(--muted) 46%, var(--muted) 54%, transparent 54%), var(--bg3);
+}
+
+.swatch.custom {
+  background: conic-gradient(#ef5350, #e8b84a, #43b86a, #4a8cf7, #a66be6, #ef5350);
+  overflow: hidden;
+}
+
+.swatch.custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.shortcut-field {
+  flex: 1;
+  padding: 5px 8px;
+}

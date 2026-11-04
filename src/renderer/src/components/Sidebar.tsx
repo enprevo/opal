@@ -6,6 +6,7 @@ import type { Favorite, FileEntry, RootInfo } from '@shared/types'
 import { basename, dirname, isAncestor, samePath } from '@shared/paths'
 import { readDragPaths, focusList } from './FileDisplay'
 import { keyFor } from '../state/commands'
+import { openFolderMenu } from './ContextMenu'
 
 interface NodeData {
   children: FileEntry[] | null
@@ -68,15 +69,17 @@ export function Sidebar() {
   )
 }
 
-function FavoriteRow({ fav, pane, currentPath, indent, onMenu }: { fav: Favorite; pane: 0 | 1; currentPath: string; indent: boolean; onMenu: (e: React.MouseEvent, f: Favorite) => void }) {
+function FavoriteRow({ fav, pane, currentPath, indent }: { fav: Favorite; pane: 0 | 1; currentPath: string; indent: boolean }) {
   const name = fav.label || basename(fav.path) || fav.path
+  const look = useStore((s) => s.folderStyles[fav.path])
   return (
     <div
-      className={`sb-item${indent ? ' sb-nested' : ''}${samePath(fav.path, currentPath) ? ' current' : ''}`}
-      title={fav.path}
+      className={`sb-item${indent ? ' sb-nested' : ''}${samePath(fav.path, currentPath) ? ' current' : ''}${look?.bg ? ' tinted' : ''}`}
+      style={look?.bg ? ({ '--tint': look.bg } as React.CSSProperties) : undefined}
+      title={fav.shortcut ? `${fav.path} — ${fav.shortcut}` : fav.path}
       data-testid="favorite-item"
       onClick={() => void A.navigate(pane, fav.path)}
-      onContextMenu={(e) => onMenu(e, fav)}
+      onContextMenu={(e) => openFolderMenu(e, pane, fav.path, fav)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault()
@@ -84,8 +87,13 @@ function FavoriteRow({ fav, pane, currentPath, indent, onMenu }: { fav: Favorite
         if (paths.length) void A.dropPaths(paths, fav.path, { ctrl: e.ctrlKey, shift: e.shiftKey })
       }}
     >
-      <Star size={13} className="fav-star" />
+      <Star size={13} className="fav-star" style={look?.color ? { color: look.color } : undefined} />
       <span className="sb-label">{name}</span>
+      {fav.shortcut && (
+        <span className="sb-key" data-testid="favorite-shortcut">
+          {fav.shortcut}
+        </span>
+      )}
       <button
         className="sb-remove"
         title="Remove favorite"
@@ -100,11 +108,10 @@ function FavoriteRow({ fav, pane, currentPath, indent, onMenu }: { fav: Favorite
   )
 }
 
-/** Favorites: ungrouped first, then collapsible groups (right-click a favorite to rename or regroup it). */
+/** Favorites: ungrouped first, then collapsible groups (right-click a favorite to rename, regroup or recolour it). */
 function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: string }) {
   const favorites = useStore((s) => s.favorites)
   const collapsed = useStore((s) => s.prefs.favoritesCollapsed)
-  const [menu, setMenu] = useState<{ x: number; y: number; fav: Favorite } | null>(null)
   const groups = useMemo(() => {
     const map = new Map<string, Favorite[]>()
     for (const f of favorites) {
@@ -114,31 +121,12 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
     }
     return map
   }, [favorites])
-  useEffect(() => {
-    if (!menu) return
-    const close = (): void => setMenu(null)
-    window.addEventListener('mousedown', close)
-    window.addEventListener('blur', close)
-    return () => {
-      window.removeEventListener('mousedown', close)
-      window.removeEventListener('blur', close)
-    }
-  }, [menu])
-  const onMenu = (e: React.MouseEvent, fav: Favorite): void => {
-    e.preventDefault()
-    setMenu({ x: e.clientX, y: e.clientY, fav })
-  }
-  const act = (fn: () => void) => (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setMenu(null)
-    fn()
-  }
   return (
     <div className="sb-section" data-testid="favorites-section">
       <div className="sb-title">Favorites</div>
       {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder</div>}
       {(groups.get('') ?? []).map((f, i) => (
-        <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} onMenu={onMenu} />
+        <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} />
       ))}
       {[...groups.entries()]
         .filter(([g]) => g)
@@ -152,27 +140,10 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
                 <span className="sb-label">{g}</span>
                 <span className="sb-count">{list.length}</span>
               </div>
-              {!closed && list.map((f, i) => <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent onMenu={onMenu} />)}
+              {!closed && list.map((f, i) => <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent />)}
             </div>
           )
         })}
-      {menu && (
-        <div className="context-menu" style={{ left: menu.x, top: menu.y, position: 'fixed' }} data-testid="favorite-menu" onMouseDown={(e) => e.stopPropagation()}>
-          <div className="cm-item" onClick={act(() => void A.navigate(pane === 0 ? 1 : 0, menu.fav.path))}>
-            <span className="cm-label">Open in the other pane</span>
-          </div>
-          <div className="cm-item" data-testid="favorite-rename" onClick={act(() => void A.renameFavorite(menu.fav))}>
-            <span className="cm-label">Rename…</span>
-          </div>
-          <div className="cm-item" onClick={act(() => void A.moveFavoriteToGroup(menu.fav))}>
-            <span className="cm-label">Move to group…</span>
-          </div>
-          <div className="cm-sep" />
-          <div className="cm-item danger" onClick={act(() => A.removeFavorite(menu.fav))}>
-            <span className="cm-label">Remove from favorites</span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -220,6 +191,7 @@ interface FlatNode {
 
 function FolderTree({ roots, currentPath }: { roots: RootInfo[]; currentPath: string }) {
   const showHidden = useStore((s) => s.prefs.showHidden)
+  const folderStyles = useStore((s) => s.folderStyles)
   const listing = useStore((s) => activeTab(s.activePane, s).listing)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [version, force] = useState(0)
@@ -496,16 +468,18 @@ function FolderTree({ roots, currentPath }: { roots: RootInfo[]; currentPath: st
         const leaf = data?.children !== null && data?.children !== undefined && data.children.length === 0
         const isCurrent = samePath(n.path, currentPath)
         const isCursor = cursor !== null && samePath(n.path, cursor)
+        const look = folderStyles[n.path]
         return (
           <div
             key={k}
             data-tree-path={n.path}
-            className={`tree-node${isCurrent ? ' current' : ''}${isCursor && focused ? ' cursor' : ''}`}
-            style={{ paddingLeft: 2 + n.depth * 16, position: 'absolute', top: (first + j) * TREE_ROW, left: 0, right: 0 }}
+            className={`tree-node${isCurrent ? ' current' : ''}${isCursor && focused ? ' cursor' : ''}${look?.bg ? ' tinted' : ''}`}
+            style={{ paddingLeft: 2 + n.depth * 16, position: 'absolute', top: (first + j) * TREE_ROW, left: 0, right: 0, ...(look?.bg ? ({ '--tint': look.bg } as React.CSSProperties) : {}) }}
             onMouseDown={(e) => {
               if (e.button !== 0) return
               setCursor(n.path)
             }}
+            onContextMenu={(e) => openFolderMenu(e, getState().activePane, n.path)}
             onClick={() => go(n.path)}
             onDoubleClick={() => void toggle(n.path)}
             onDragOver={(e) => e.preventDefault()}
@@ -525,7 +499,7 @@ function FolderTree({ roots, currentPath }: { roots: RootInfo[]; currentPath: st
             >
               {data?.loading ? <span className="spinner small" /> : leaf ? null : isOpen ? <ChevronDown size={16} strokeWidth={2.4} /> : <ChevronRight size={16} strokeWidth={2.4} />}
             </span>
-            {n.isRoot ? <HardDrive size={13} className="tree-icon" /> : <Folder size={13} className="tree-icon folder" />}
+            {n.isRoot ? <HardDrive size={13} className="tree-icon" style={look?.color ? { color: look.color } : undefined} /> : <Folder size={13} className="tree-icon folder" style={look?.color ? { color: look.color } : undefined} />}
             <span className="tree-label">{n.label}</span>
           </div>
         )

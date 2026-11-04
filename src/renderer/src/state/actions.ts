@@ -16,7 +16,7 @@ import {
   type PaneState,
   type TabState
 } from './store'
-import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type Favorite, type UiState, type FileEntry, type FolderFormat, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
+import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type Favorite, type UiState, type FileEntry, type FolderFormat, type FolderStyle, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
 import { basename, dirname, isAncestor, join, normalize, samePath } from '@shared/paths'
 import { compilePattern } from '@shared/wildcard'
 import { defaultHotkeys, effectiveHotkeys, hotkeyOverrides, installKeyboard } from './commands'
@@ -73,6 +73,7 @@ export async function bootstrap(): Promise<void> {
     renamePresets: persisted.renamePresets ?? migrateLocalPresets(),
     labels: persisted.labels ?? {},
     labelDefs: persisted.labelDefs?.length ? persisted.labelDefs : DEFAULT_LABELS,
+    folderStyles: persisted.folderStyles ?? {},
     folderFormats: persisted.folderFormats ?? {},
     roots,
     panes,
@@ -1095,6 +1096,7 @@ export async function commitInlineRename(pane: 0 | 1, from: string, newName: str
   try {
     const to = await api().rename(from, newName)
     moveLabels([{ from, to }])
+    moveFolderStyles([{ from, to }])
     await refreshPane(pane, basename(to))
     updateTab(pane, null, () => ({ selected: new Set([to]) }))
     refreshUndo()
@@ -1111,6 +1113,7 @@ export async function advancedRename(): Promise<void> {
   if (!pairs || !pairs.length) return
   const r = await api().renameMany(pairs)
   moveLabels(r.done)
+  moveFolderStyles(r.done)
   if (r.errors.length) toast(`Rename: ${r.errors.length} error(s): ${r.errors[0]}`, 'error')
   else toast(`Renamed ${r.done.length} item(s)`)
   await refreshPane(pane)
@@ -1203,6 +1206,102 @@ export async function moveFavoriteToGroup(fav: Favorite): Promise<void> {
 export function toggleFavoriteGroup(group: string): void {
   const cur = getState().prefs.favoritesCollapsed
   setPrefs({ favoritesCollapsed: cur.includes(group) ? cur.filter((g) => g !== group) : [...cur, group] })
+}
+
+// ---------------------------------------------------------------------------
+// Folder customisation: favorite shortcuts, icon and row colours
+// ---------------------------------------------------------------------------
+
+/** The favorite entry of a folder (the first one when it is listed in several groups). */
+export function favoriteOf(path: string): Favorite | undefined {
+  return getState().favorites.find((f) => samePath(f.path, path))
+}
+
+/** Adds the folder to the favorites, or changes its entry. A field set to `undefined` is removed (e.g. the shortcut). */
+export function upsertFavorite(path: string, patch: Partial<Omit<Favorite, 'path'>> = {}): void {
+  const favorites = getState().favorites
+  const cur = favoriteOf(path)
+  const next: Favorite = { ...(cur ?? { path }), ...patch }
+  for (const k of Object.keys(next) as (keyof Favorite)[]) if (next[k] === undefined) delete next[k]
+  saveFavorites(cur ? favorites.map((f) => (f === cur ? next : f)) : [...favorites, next])
+}
+
+/** Removes every entry of the folder from the favorites. */
+export function unfavorite(path: string): void {
+  saveFavorites(getState().favorites.filter((f) => !samePath(f.path, path)))
+}
+
+/** Why `combo` cannot be used as the shortcut of the favorite `path` ('' when it is free). */
+export function shortcutConflict(combo: string, path?: string): string {
+  const s = getState()
+  const command = s.hotkeys[combo]
+  if (command) return `Already used by the command "${command}"`
+  const other = s.favorites.find((f) => f.shortcut === combo && !(path && samePath(f.path, path)))
+  if (other) return `Already used by the favorite "${other.label || basename(other.path) || other.path}"`
+  return ''
+}
+
+export function favoriteForShortcut(combo: string): Favorite | undefined {
+  return getState().favorites.find((f) => f.shortcut === combo)
+}
+
+function persistFolderStyles(folderStyles: Record<string, FolderStyle>): void {
+  setState({ folderStyles })
+  void api().setSettings({ folderStyles })
+}
+
+/** Sets the icon and/or row colour of a folder. A `null` colour goes back to the default look. */
+export function setFolderStyle(path: string, patch: { color?: string | null; bg?: string | null }): void {
+  const styles = { ...getState().folderStyles }
+  const next: FolderStyle = { ...styles[path] }
+  if (patch.color !== undefined) {
+    if (patch.color) next.color = patch.color
+    else delete next.color
+  }
+  if (patch.bg !== undefined) {
+    if (patch.bg) next.bg = patch.bg
+    else delete next.bg
+  }
+  if (next.color || next.bg) styles[path] = next
+  else delete styles[path]
+  persistFolderStyles(styles)
+}
+
+/** Keeps colours attached to folders (and the folders inside them) that were renamed inside Opal. */
+export function moveFolderStyles(pairs: { from: string; to: string }[]): void {
+  const cur = getState().folderStyles
+  const keys = Object.keys(cur)
+  if (!keys.length) return
+  let changed = false
+  const next: Record<string, FolderStyle> = { ...cur }
+  for (const { from, to } of pairs) {
+    for (const k of keys) {
+      if (!(k in next)) continue
+      const inside = samePath(k, from) || isAncestor(from, k)
+      if (!inside) continue
+      const moved = samePath(k, from) ? to : join(to, k.slice(from.length).replace(/^[\\/]+/, ''))
+      next[moved] = next[k]
+      delete next[k]
+      changed = true
+    }
+  }
+  if (changed) persistFolderStyles(next)
+}
+
+/** Properties dialog of a folder that is not part of the list selection (path bar, folder tree). */
+export async function showFolderProperties(pane: 0 | 1, path: string): Promise<void> {
+  try {
+    const entry = await api().stat(path)
+    await openDialog('properties', { entries: [entry] })
+    await refreshPane(pane)
+  } catch (e) {
+    toast(cleanError(e), 'error')
+  }
+}
+
+/** Dialog with the folder's favorite name and shortcut, icon colour and row background. */
+export async function customizeFolder(path: string): Promise<void> {
+  await openDialog('folderOptions', { path })
 }
 
 export async function dropPaths(paths: string[], dest: string, mods: { ctrl: boolean; shift: boolean }): Promise<void> {

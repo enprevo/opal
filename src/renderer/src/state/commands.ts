@@ -673,10 +673,20 @@ function onKeyDown(e: KeyboardEvent): void {
     return
   }
   if (isTypingTarget(e.target)) return
-  if ((e.target as HTMLElement | null)?.closest?.('.folder-tree')) return
 
   const combo = comboFromEvent(e)
   const bound = s.hotkeys[combo]
+  // A favorite's own shortcut opens its folder in the active pane, also while the folder tree has the focus.
+  // Key bindings of commands come first, so they stay the single source of truth for what a key does.
+  if (!bound) {
+    const fav = A.favoriteForShortcut(combo)
+    if (fav) {
+      e.preventDefault()
+      void A.navigate(s.activePane, fav.path)
+      return
+    }
+  }
+  if ((e.target as HTMLElement | null)?.closest?.('.folder-tree')) return
   // Printable keys without modifiers go to find-as-you-type unless they are bound (+ / -).
   const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
   if (printable && e.key === '>') {

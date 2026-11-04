@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useStore } from '../state/store'
 
 const cache = new Map<string, string>()
 const pending = new Map<string, Promise<string>>()
@@ -40,11 +41,19 @@ export function useFileIcon(path: string, isDir: boolean, size: IconSize = 'smal
   return url
 }
 
-const FOLDER_SVG =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#e8b84a" d="M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>'
-  )
+const DEFAULT_FOLDER_COLOR = '#e8b84a'
+const folderSvgs = new Map<string, string>()
+/** The built-in folder icon in any colour (folders the user coloured). */
+function folderSvg(color: string): string {
+  let url = folderSvgs.get(color)
+  if (!url) {
+    url =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="${color}" d="M2 6a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>`)
+    folderSvgs.set(color, url)
+  }
+  return url
+}
 const FILE_SVG =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
@@ -53,7 +62,8 @@ const FILE_SVG =
 
 export function FileIcon({ path, isDir, size = 16 }: { path: string; isDir: boolean; size?: number }) {
   const url = useFileIcon(path, isDir, size > 24 ? 'large' : 'small')
-  const src = url || (isDir ? FOLDER_SVG : FILE_SVG)
+  const color = useStore((s) => (isDir ? s.folderStyles[path]?.color : undefined))
+  const src = url || (isDir ? folderSvg(color ?? DEFAULT_FOLDER_COLOR) : FILE_SVG)
   return <img className="file-icon" src={src} width={size} height={size} draggable={false} alt="" />
 }
 

@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Right-click a folder name in the path bar, the folder tree or the Favorites section for a folder menu: Properties,
+  add to favorites with a shortcut key, and a custom color for the folder icon and for the background of its row.
+  The same color entries are in the context menu of a folder in the file list.
+- Favorites can have a shortcut (Ctrl or Alt with a key, or a function key) that opens the folder in the active pane
+  from anywhere, also while the folder tree has the focus. Keys already used by a command or another favorite are
+  refused. The shortcut is shown next to the favorite.
+- Folder colors are shown in the path bar, the folder tree, Favorites and every file view, and are kept when the
+  folder is renamed in Opal. They are part of exported settings.
+
 ### Linux
 
 - The window and the dock now recognise the installed app (matching `desktopName`), so Opal gets its own icon, can be

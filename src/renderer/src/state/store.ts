@@ -8,6 +8,7 @@ import {
   type UiState,
   type FileEntry,
   type FolderFormat,
+  type FolderStyle,
   type GroupBy,
   type ItemMeta,
   type JobProgress,
@@ -91,7 +92,8 @@ export interface AppState {
   clipboard: { paths: string[]; cut: boolean } | null
   jobs: Record<string, JobProgress>
   dialog: DialogRequest | null
-  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null } | null
+  /** `folder` is set when the menu was opened on a folder name (path bar, folder tree, favorites) instead of a list item. */
+  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null; folder?: { path: string; favorite?: Favorite } } | null
   toasts: Toast[]
   undoLabel: string
   cliOpen: boolean
@@ -102,6 +104,8 @@ export interface AppState {
   /** Colour labels (tags) per path, and their definitions. */
   labels: Readonly<Record<string, string[]>>
   labelDefs: LabelDef[]
+  /** Custom folder icon / row colours, by path. */
+  folderStyles: Readonly<Record<string, FolderStyle>>
   /** Lazily loaded column metadata (image dimensions, folder item counts). */
   meta: Readonly<Record<string, ItemMeta>>
   /** Remembered view/sort/grouping per folder. */
@@ -147,6 +151,7 @@ const initial: AppState = {
   navLock: false,
   labels: {},
   labelDefs: DEFAULT_LABELS,
+  folderStyles: {},
   meta: {},
   folderFormats: {},
   quickLook: false,

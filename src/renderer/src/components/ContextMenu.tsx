@@ -42,13 +42,17 @@ import {
   Image,
   Sparkles,
   CircleOff,
-  Search
+  Search,
+  Keyboard,
+  Palette,
+  PaintBucket,
+  StarOff
 } from 'lucide-react'
 import { activeTab, getState, setState, useStore } from '../state/store'
 import { keyFor, runCommand } from '../state/commands'
 import * as A from '../state/actions'
 import { COLUMN_LABELS, GROUP_OPTIONS } from './FileList'
-import type { FileEntry, SortColumn, ViewMode } from '@shared/types'
+import { FOLDER_COLORS, type Favorite, type FileEntry, type SortColumn, type ViewMode } from '@shared/types'
 
 export interface MenuItem {
   icon?: LucideIcon
@@ -71,7 +75,15 @@ export function ContextMenu() {
   const menu = useStore((s) => s.contextMenu)
   useStore((s) => s.hotkeys)
   if (!menu) return null
-  return <MenuPopup x={menu.x} y={menu.y} items={buildItems(menu.pane, menu.target)} root testId="context-menu" />
+  const items = menu.folder ? buildFolderItems(menu.pane, menu.folder.path, menu.folder.favorite) : buildItems(menu.pane, menu.target)
+  return <MenuPopup x={menu.x} y={menu.y} items={items} root testId={menu.folder?.favorite ? 'favorite-menu' : menu.folder ? 'folder-menu' : 'context-menu'} />
+}
+
+/** Opens the folder menu (path bar, folder tree, favorites) at the mouse position. */
+export function openFolderMenu(e: React.MouseEvent, pane: 0 | 1, path: string, favorite?: Favorite): void {
+  e.preventDefault()
+  e.stopPropagation()
+  setState({ contextMenu: { x: e.clientX, y: e.clientY, pane, target: null, folder: { path, favorite } } })
 }
 
 function MenuPopup({ x, y, items, root, testId }: { x: number; y: number; items: MenuEntry[]; root?: boolean; testId?: string }) {
@@ -203,6 +215,68 @@ function labelSubmenu(paths: string[]): MenuEntry[] {
   ]
 }
 
+/** Colour choices for a folder's icon (`key` 'color') or the background of its row ('bg'). */
+function folderColorSubmenu(path: string, key: 'color' | 'bg'): MenuEntry[] {
+  const cur = getState().folderStyles[path]?.[key]
+  const what = key === 'color' ? 'icon' : 'row background'
+  return [
+    ...FOLDER_COLORS.map((c) => ({
+      color: c.color,
+      label: c.name,
+      desc: `Use ${c.name.toLowerCase()} for this folder's ${what}`,
+      checked: cur === c.color,
+      testId: `${key === 'color' ? 'folder-color' : 'row-color'}-${c.name.toLowerCase()}`,
+      action: () => A.setFolderStyle(path, { [key]: c.color })
+    })),
+    'sep',
+    { icon: CircleOff, label: 'Default', desc: `Back to the standard ${what}`, checked: !cur, testId: `${key === 'color' ? 'folder-color' : 'row-color'}-default`, action: () => A.setFolderStyle(path, { [key]: null }) },
+    { icon: Palette, label: 'Other color…', desc: 'Pick any color, and set the name and shortcut of the favorite', action: () => void A.customizeFolder(path) }
+  ]
+}
+
+/** Entries every folder menu shares: favorite with a shortcut, icon colour and row colour. */
+function folderLookItems(path: string, favorite: Favorite | undefined): MenuEntry[] {
+  return [
+    favorite
+      ? { icon: StarOff, label: 'Remove from favorites', desc: 'Stop listing this folder in the Favorites section', testId: 'folder-unfavorite', action: () => A.unfavorite(path) }
+      : { icon: Star, label: 'Add to favorites', desc: 'Favorites appear at the top of the sidebar', testId: 'folder-favorite', action: () => A.upsertFavorite(path) },
+    {
+      icon: Keyboard,
+      label: favorite?.shortcut ? 'Change shortcut…' : 'Add to favorites with a shortcut…',
+      desc: 'A key combination that opens this folder from anywhere in Opal',
+      hint: favorite?.shortcut ? (getState().info.platform === 'darwin' ? favorite.shortcut.replace(/Ctrl\+/g, '⌘').replace(/Alt\+/g, '⌥').replace(/Shift\+/g, '⇧') : favorite.shortcut) : undefined,
+      testId: 'folder-shortcut',
+      action: () => void A.customizeFolder(path)
+    },
+    { icon: Palette, label: 'Folder color', desc: 'Color of the folder icon in the tree, lists and path bar', submenu: folderColorSubmenu(path, 'color'), testId: 'folder-color' },
+    { icon: PaintBucket, label: 'Row background', desc: 'Tint the whole row of this folder', submenu: folderColorSubmenu(path, 'bg'), testId: 'row-color' }
+  ]
+}
+
+/** Menu of a folder shown by name: path bar, folder tree and favorites (not part of the list selection). */
+function buildFolderItems(pane: 0 | 1, path: string, favoriteEntry?: Favorite): MenuEntry[] {
+  const s = getState()
+  const favorite = favoriteEntry ?? A.favoriteOf(path)
+  return [
+    { icon: FolderOpen, label: 'Open', desc: 'Show this folder in the active pane', action: () => void A.navigate(pane, path) },
+    ...(s.prefs.dualDisplay ? [{ icon: PanelRightOpen, label: 'Open in other pane', desc: 'Show this folder in the other pane', action: () => void A.navigate(pane === 0 ? 1 : 0, path) } as MenuEntry] : []),
+    { icon: SquarePlus, label: 'Open in new tab', desc: 'Open this folder in a new tab of this pane', action: () => A.newTab(pane, path) },
+    { icon: FolderSearch, label: 'Show in system file manager', desc: 'Open this folder in Explorer / Finder / your desktop file manager', action: () => void window.opal.reveal(path) },
+    { icon: Link, label: 'Copy full path', desc: 'Copy the complete path as text', action: () => void window.opal.writeClipboardText(path) },
+    'sep',
+    { icon: Info, label: 'Properties', desc: 'Size, dates and attributes of this folder', testId: 'folder-properties', action: () => void A.showFolderProperties(pane, path) },
+    'sep',
+    ...folderLookItems(path, favorite),
+    ...(favoriteEntry
+      ? ([
+          'sep',
+          { icon: PencilLine, label: 'Rename favorite…', desc: 'The name shown in the sidebar', testId: 'favorite-rename', action: () => void A.renameFavorite(favoriteEntry) },
+          { icon: ListTree, label: 'Move to group…', desc: 'Put the favorite in a collapsible group', action: () => void A.moveFavoriteToGroup(favoriteEntry) }
+        ] as MenuEntry[])
+      : [])
+  ]
+}
+
 function buildItems(pane: 0 | 1, t: FileEntry | null): MenuEntry[] {
   const s = getState()
   const run = (cmd: string) => () => void runCommand(cmd)
@@ -272,7 +346,7 @@ function buildItems(pane: 0 | 1, t: FileEntry | null): MenuEntry[] {
     ...(t.isDir
       ? ([
           { icon: Calculator, label: 'Calculate size', desc: 'Compute the total size of the folder and its contents', hint: keyFor('GetSizes'), action: run('GetSizes') },
-          { icon: Star, label: s.favorites.some((f) => f.path === t.path) ? 'Remove from favorites' : 'Add to favorites', desc: 'Favorites appear at the top of the sidebar', action: () => A.toggleFavorite(t.path) },
+          ...(multi ? [{ icon: Star, label: s.favorites.some((f) => f.path === t.path) ? 'Remove from favorites' : 'Add to favorites', desc: 'Favorites appear at the top of the sidebar', action: () => A.toggleFavorite(t.path) } as MenuEntry] : folderLookItems(t.path, A.favoriteOf(t.path))),
           { icon: Sparkles, label: 'Index for semantic search', desc: 'Add this folder to the folders whose documents can be searched by meaning', action: () => void A.addSemanticFolder(t.path) }
         ] as MenuEntry[])
       : []),

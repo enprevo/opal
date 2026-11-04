@@ -5,6 +5,7 @@ import * as A from '../state/actions'
 import { breadcrumbs, basename } from '@shared/paths'
 import { formatSize, pluralize } from '@shared/format'
 import { FileList } from './FileList'
+import { openFolderMenu } from './ContextMenu'
 
 export function FileDisplay({ pane }: { pane: 0 | 1 }) {
   const isSource = useStore((s) => s.activePane === pane)
@@ -93,6 +94,7 @@ export function readDragPaths(dt: DataTransfer): string[] {
 
 function LocationBar({ pane, dual, isSource }: { pane: 0 | 1; dual: boolean; isSource: boolean }) {
   const navLock = useStore((s) => s.navLock)
+  const folderStyles = useStore((s) => s.folderStyles)
   const tab = useStore((s) => activeTab(pane, s))
   const editing = useStore((s) => s.editingPath === pane)
   const [text, setText] = useState(tab.path)
@@ -160,12 +162,17 @@ function LocationBar({ pane, dual, isSource }: { pane: 0 | 1; dual: boolean; isS
             if (e.target === e.currentTarget) setState({ editingPath: pane })
           }}
         >
-          {crumbs.map((c, i) => (
+          {crumbs.map((c, i) => {
+            const look = folderStyles[c.path]
+            return (
             <span key={c.path} className="crumb-wrap">
               {i > 0 && <ChevronRight size={12} className="crumb-sep" />}
               <button
-                className="crumb"
+                className={`crumb${look?.bg ? ' tinted' : ''}`}
+                data-testid="crumb"
+                style={look ? ({ ...(look.bg ? { '--tint': look.bg } : {}), ...(look.color ? { color: look.color } : {}) } as React.CSSProperties) : undefined}
                 onClick={() => void A.navigate(pane, c.path)}
+                onContextMenu={(e) => openFolderMenu(e, pane, c.path)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault()
@@ -176,7 +183,8 @@ function LocationBar({ pane, dual, isSource }: { pane: 0 | 1; dual: boolean; isS
                 {c.label}
               </button>
             </span>
-          ))}
+            )
+          })}
           {tab.loading && <span className="spinner" />}
         </div>
       )}

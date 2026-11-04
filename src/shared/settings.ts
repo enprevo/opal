@@ -3,7 +3,7 @@
  * a file exported on another computer (possibly another OS or an older version): unknown keys are dropped,
  * values of the wrong type fall back to defaults, and older shapes are migrated.
  */
-import { DEFAULT_PREFS, type Favorite, type LabelDef, type PersistedState, type Prefs, type UiState } from './types'
+import { DEFAULT_PREFS, type Favorite, type FolderStyle, type LabelDef, type PersistedState, type Prefs, type UiState } from './types'
 
 export const SETTINGS_FORMAT = 'opal-settings'
 
@@ -43,10 +43,30 @@ export function normalizePrefs(raw: unknown): Prefs {
   return out
 }
 
+/** A colour as the colour picker writes it: "#rrggbb". */
+export function isHexColor(v: unknown): v is string {
+  return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)
+}
+
+/**
+ * Shortcuts a favorite may use: a function key, or any key with Ctrl or Alt. Plain letters and Shift+letter are left
+ * to find-as-you-type.
+ */
+export function isFavoriteShortcut(combo: unknown): combo is string {
+  if (typeof combo !== 'string') return false
+  const mods = /^(?:(?:Ctrl|Alt|Shift)\+)*/.exec(combo)?.[0] ?? ''
+  const key = combo.slice(mods.length)
+  if (!key || ['Ctrl', 'Alt', 'Shift', 'Meta'].includes(key)) return false
+  if (/^F(?:[1-9]|1\d|2[0-4])$/.test(key)) return true
+  return mods.includes('Ctrl+') || mods.includes('Alt+')
+}
+
 /** Accepts the current shape and the older plain list of paths; drops duplicates and invalid entries. */
 export function normalizeFavorites(raw: unknown): Favorite[] {
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>()
+  // A key combination opens one folder only: the first favorite that claims it keeps it.
+  const shortcutOwner = new Map<string, string>()
   const out: Favorite[] = []
   for (const item of raw) {
     const fav: Favorite | null =
@@ -56,14 +76,34 @@ export function normalizeFavorites(raw: unknown): Favorite[] {
           ? {
               path: item.path,
               ...(typeof item.label === 'string' && item.label.trim() ? { label: item.label.trim() } : {}),
-              ...(typeof item.group === 'string' && item.group.trim() ? { group: item.group.trim() } : {})
+              ...(typeof item.group === 'string' && item.group.trim() ? { group: item.group.trim() } : {}),
+              ...(isFavoriteShortcut(typeof item.shortcut === 'string' ? item.shortcut.trim() : '') ? { shortcut: (item.shortcut as string).trim() } : {})
             }
           : null
     if (!fav || !fav.path.trim()) continue
+    if (fav.shortcut) {
+      const owner = shortcutOwner.get(fav.shortcut)
+      if (owner !== undefined && owner !== fav.path.toLowerCase()) delete fav.shortcut
+      else shortcutOwner.set(fav.shortcut, fav.path.toLowerCase())
+    }
     const key = `${fav.group ?? ''}\u0000${fav.path.toLowerCase()}`
     if (seen.has(key)) continue
     seen.add(key)
     out.push(fav)
+  }
+  return out
+}
+
+export function normalizeFolderStyles(raw: unknown): Record<string, FolderStyle> | undefined {
+  if (!isObj(raw)) return undefined
+  const out: Record<string, FolderStyle> = {}
+  for (const [p, v] of Object.entries(raw)) {
+    if (!p.trim() || !isObj(v)) continue
+    const style: FolderStyle = {
+      ...(isHexColor(v.color) ? { color: v.color.toLowerCase() } : {}),
+      ...(isHexColor(v.bg) ? { bg: v.bg.toLowerCase() } : {})
+    }
+    if (style.color || style.bg) out[p] = style
   }
   return out
 }
@@ -117,6 +157,8 @@ export function normalizeState(raw: unknown): PersistedState {
   }
   const defs = normalizeLabelDefs(r.labelDefs)
   if (defs) state.labelDefs = defs
+  const folderStyles = normalizeFolderStyles(r.folderStyles)
+  if (folderStyles) state.folderStyles = folderStyles
   if (isObj(r.folderFormats)) state.folderFormats = r.folderFormats as PersistedState['folderFormats']
   if (isObj(r.session) && Array.isArray(r.session.panes)) state.session = r.session as unknown as PersistedState['session']
   if (r.hotkeys !== undefined) state.hotkeys = stringMap(r.hotkeys)

@@ -148,6 +148,19 @@ export const DEFAULT_LABELS: LabelDef[] = [
   { id: 'gray', name: 'Gray', color: '#98989d' }
 ]
 
+/** Quick choices for a folder's icon and row colour (any colour can be picked in the folder dialog). */
+export const FOLDER_COLORS: { name: string; color: string }[] = [
+  { name: 'Red', color: '#ef5350' },
+  { name: 'Orange', color: '#fb8c3c' },
+  { name: 'Yellow', color: '#e8b84a' },
+  { name: 'Green', color: '#43b86a' },
+  { name: 'Teal', color: '#26b5a5' },
+  { name: 'Blue', color: '#4a8cf7' },
+  { name: 'Purple', color: '#a66be6' },
+  { name: 'Pink', color: '#ec5fa5' },
+  { name: 'Gray', color: '#8e96a3' }
+]
+
 export interface ItemMeta {
   width?: number
   height?: number
@@ -222,6 +235,14 @@ export interface Favorite {
   label?: string
   /** Group shown as a collapsible section in the sidebar; nested groups are joined with " / ". */
   group?: string
+  /** Key combination (e.g. "Ctrl+Alt+1") that opens this folder in the active pane. */
+  shortcut?: string
+}
+
+/** Colours the user gave to a folder: its icon and the background of its row (both "#rrggbb"). */
+export interface FolderStyle {
+  color?: string
+  bg?: string
 }
 
 /** Window layout remembered between sessions (sizes in pixels, ratio 0..1). */
@@ -250,6 +271,8 @@ export interface PersistedState {
   recent: string[]
   labels?: Record<string, string[]>
   labelDefs?: LabelDef[]
+  /** Custom icon / row colours, by folder path. */
+  folderStyles?: Record<string, FolderStyle>
   folderFormats?: Record<string, FolderFormat>
   session?: { panes: SessionPane[]; activePane: number }
   /** Changes to the default key bindings: combo → command, or '' for a default binding that was removed. */
