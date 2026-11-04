@@ -100,7 +100,7 @@ export class SettingsStore {
       this.backedUp = true
       await fsp.copyFile(this.file, this.backup).catch(() => undefined)
     }
-    const tmp = this.file + '.tmp'
+    const tmp = `${this.file}.${process.pid}-${Date.now().toString(36)}.tmp`
     await fsp.writeFile(tmp, JSON.stringify(this.state, null, 2), 'utf8')
     await renameRetry(tmp, this.file)
   }

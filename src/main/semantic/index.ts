@@ -167,6 +167,13 @@ export class SemanticIndex {
   }
 
   private async doLoad(): Promise<void> {
+    // Temporary files left by an interrupted save.
+    for (const f of await fsp.readdir(this.dir).catch(() => [] as string[])) {
+      if (!f.endsWith('.tmp')) continue
+      const full = path.join(this.dir, f)
+      const st = await fsp.stat(full).catch(() => null)
+      if (st && Date.now() - st.mtimeMs > 10 * 60_000) await fsp.unlink(full).catch(() => undefined)
+    }
     try {
       const manifest = JSON.parse(await fsp.readFile(path.join(this.dir, 'index.json'), 'utf8')) as IndexFile
       this.folders = manifest.folders ?? []
@@ -231,7 +238,10 @@ export class SemanticIndex {
     for (const d of this.docs.values()) total += d.chunks.length
     const packed = new Float32Array(total * dims)
     let next = 0
-    const out = createWriteStream(path.join(this.dir, 'docs.ndjson.tmp'), 'utf8')
+    // Unique temporary names: another process (or a second index on the same folder) can never rename ours.
+    const tag = `${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+    const tmp = (name: string): string => path.join(this.dir, `${name}.${tag}.tmp`)
+    const out = createWriteStream(tmp('docs.ndjson'), 'utf8')
     for (const d of this.docs.values()) {
       packed.set(this.vectors.subarray(d.v * dims, (d.v + d.chunks.length) * dims), next * dims)
       d.v = next
@@ -244,12 +254,12 @@ export class SemanticIndex {
     this.vectors = packed
     this.vectorCount = next
     const manifest: IndexFile = { version: 3, embedder: this.embedder.id, dims, folders: this.folders, options: this.options }
-    await fsp.writeFile(path.join(this.dir, 'vectors.bin.tmp'), Buffer.from(packed.buffer, packed.byteOffset, packed.byteLength))
-    await fsp.writeFile(path.join(this.dir, 'index.json.tmp'), JSON.stringify(manifest))
+    await fsp.writeFile(tmp('vectors.bin'), Buffer.from(packed.buffer, packed.byteOffset, packed.byteLength))
+    await fsp.writeFile(tmp('index.json'), JSON.stringify(manifest))
     // index.json goes last: it is what marks the three files as a consistent set.
-    await renameRetry(path.join(this.dir, 'vectors.bin.tmp'), path.join(this.dir, 'vectors.bin'))
-    await renameRetry(path.join(this.dir, 'docs.ndjson.tmp'), path.join(this.dir, 'docs.ndjson'))
-    await renameRetry(path.join(this.dir, 'index.json.tmp'), path.join(this.dir, 'index.json'))
+    await renameRetry(tmp('vectors.bin'), path.join(this.dir, 'vectors.bin'))
+    await renameRetry(tmp('docs.ndjson'), path.join(this.dir, 'docs.ndjson'))
+    await renameRetry(tmp('index.json'), path.join(this.dir, 'index.json'))
   }
 
   private meanCache: { count: number; v: Float32Array } | null = null
