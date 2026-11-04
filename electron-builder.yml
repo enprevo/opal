@@ -53,6 +53,13 @@ linux:
   description: Fast, keyboard-friendly dual-pane file manager with tabs, Quick Look, batch rename and local semantic search.
   target: [AppImage, deb, rpm]
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  # The window's WM_CLASS / Wayland app_id comes from "desktopName" in package.json; keeping the .desktop file
+  # named the same lets the dock match the running window to it (correct icon, "Pin to Dash").
+  syncDesktopName: true
+  # Window icon (title bar, Alt+Tab), loaded at runtime from resources/icon.png.
+  extraResources:
+    - from: build/icon.png
+      to: icon.png
   mimeTypes:
     - inode/directory
   desktop:
@@ -60,7 +67,6 @@ linux:
       Name: Opal
       Comment: Dual-pane file manager
       Categories: Utility;FileManager;System;
-      StartupWMClass: Opal
 deb:
   depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
 

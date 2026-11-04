@@ -3,6 +3,13 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Linux
+
+- The window and the dock now recognise the installed app (matching `desktopName`), so Opal gets its own icon, can be
+  pinned to the dock and the window carries the app icon.
+
 ## [0.2.0] — 2026-10-23
 
 First public release.

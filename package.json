@@ -29,6 +29,7 @@
     "url": "https://github.com/enprevo"
   },
   "main": "./out/main/index.js",
+  "desktopName": "opal-file-manager.desktop",
   "engines": {
     "node": ">=22.12"
   },

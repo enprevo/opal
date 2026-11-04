@@ -410,6 +410,8 @@ function createWindow(startPaths?: string[]): void {
     minHeight: 500,
     show: false,
     title: 'Opal',
+    // Windows and macOS take the icon from the executable/bundle; Linux needs it on the window.
+    ...(process.platform === 'linux' ? { icon: app.isPackaged ? path.join(process.resourcesPath, 'icon.png') : path.join(app.getAppPath(), 'build', 'icon.png') } : {}),
     backgroundColor: settings.get().prefs.theme === 'light' ? '#f3f3f3' : '#1e1f22',
     autoHideMenuBar: true,
     webPreferences: {
