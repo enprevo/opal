@@ -4,6 +4,7 @@ import { setUi } from './state/actions'
 import { Toolbar } from './components/Toolbar'
 import { FileDisplay } from './components/FileDisplay'
 import { Sidebar } from './components/Sidebar'
+import { FavoritesBar } from './components/FavoritesBar'
 import { ViewerPane } from './components/ViewerPane'
 import { CommandLine } from './components/CommandLine'
 import { JobsPanel } from './components/JobsPanel'
@@ -35,6 +36,7 @@ export function App() {
   return (
     <div className="app">
       <Toolbar />
+      {prefs.showFavoritesBar && <FavoritesBar />}
       <div className="main">
         {prefs.showTree && (
           <>

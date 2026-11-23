@@ -7,6 +7,7 @@ import { basename, dirname, isAncestor, samePath } from '@shared/paths'
 import { readDragPaths, focusList } from './FileDisplay'
 import { keyFor } from '../state/commands'
 import { openFolderMenu } from './ContextMenu'
+import { openFavoriteFileMenu } from './FavoritesBar'
 
 interface NodeData {
   children: FileEntry[] | null
@@ -71,23 +72,26 @@ export function Sidebar() {
 
 function FavoriteRow({ fav, pane, currentPath, indent }: { fav: Favorite; pane: 0 | 1; currentPath: string; indent: boolean }) {
   const name = fav.label || basename(fav.path) || fav.path
-  const look = useStore((s) => s.folderStyles[fav.path])
+  const look = useStore((s) => (fav.file ? undefined : s.folderStyles[fav.path]))
   return (
     <div
-      className={`sb-item${indent ? ' sb-nested' : ''}${samePath(fav.path, currentPath) ? ' current' : ''}${look?.bg ? ' tinted' : ''}`}
+      className={`sb-item${indent ? ' sb-nested' : ''}${!fav.file && samePath(fav.path, currentPath) ? ' current' : ''}${look?.bg ? ' tinted' : ''}`}
       style={look?.bg ? ({ '--tint': look.bg } as React.CSSProperties) : undefined}
       title={fav.shortcut ? `${fav.path} — ${fav.shortcut}` : fav.path}
       data-testid="favorite-item"
-      onClick={() => void A.navigate(pane, fav.path)}
-      onContextMenu={(e) => openFolderMenu(e, pane, fav.path, fav)}
-      onDragOver={(e) => e.preventDefault()}
+      onClick={() => void A.openFavorite(pane, fav)}
+      onContextMenu={(e) => (fav.file ? openFavoriteFileMenu(e, pane, fav) : openFolderMenu(e, pane, fav.path, fav))}
+      onDragOver={(e) => {
+        if (!fav.file) e.preventDefault()
+      }}
       onDrop={(e) => {
         e.preventDefault()
+        if (fav.file) return
         const paths = readDragPaths(e.dataTransfer)
         if (paths.length) void A.dropPaths(paths, fav.path, { ctrl: e.ctrlKey, shift: e.shiftKey })
       }}
     >
-      <Star size={13} className="fav-star" style={look?.color ? { color: look.color } : undefined} />
+      {fav.file ? <FileText size={13} className="fav-file" /> : <Star size={13} className="fav-star" style={look?.color ? { color: look.color } : undefined} />}
       <span className="sb-label">{name}</span>
       {fav.shortcut && (
         <span className="sb-key" data-testid="favorite-shortcut">
@@ -112,6 +116,7 @@ function FavoriteRow({ fav, pane, currentPath, indent }: { fav: Favorite; pane: 
 function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: string }) {
   const favorites = useStore((s) => s.favorites)
   const collapsed = useStore((s) => s.prefs.favoritesCollapsed)
+  const extraGroups = useStore((s) => s.prefs.favoriteGroups)
   const groups = useMemo(() => {
     const map = new Map<string, Favorite[]>()
     for (const f of favorites) {
@@ -119,12 +124,14 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
       if (!map.has(g)) map.set(g, [])
       map.get(g)!.push(f)
     }
+    // Groups created on the favorites bar show here too, even while empty.
+    for (const g of extraGroups) if (g && !map.has(g)) map.set(g, [])
     return map
-  }, [favorites])
+  }, [favorites, extraGroups])
   return (
     <div className="sb-section" data-testid="favorites-section">
       <div className="sb-title">Favorites</div>
-      {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder</div>}
+      {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder; or drag files and folders onto the favorites bar</div>}
       {(groups.get('') ?? []).map((f, i) => (
         <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} />
       ))}

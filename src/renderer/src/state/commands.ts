@@ -202,7 +202,7 @@ export const COMMAND_DOCS: { name: string; usage: string; description: string }[
   { name: 'CreateFile', usage: 'CreateFile [NAME=<name>]', description: 'Create a new empty file in the source.' },
   { name: 'Clipboard', usage: 'Clipboard COPY | CUT | PASTE | COPYNAMES[=nopaths]', description: 'File clipboard operations; COPYNAMES copies full paths (or names only).' },
   { name: 'Select', usage: 'Select ALL | NONE | INVERT | SIMILAR | RESELECT | SOURCETODEST[=notin|noext] | DESTTOSOURCE[=notin|noext] [DESELECTNOMATCH] | PATTERN[=<wildcard>] [DESELECT] [FILES|DIRS] [EXCLUSIVE]', description: 'Selection by wildcard, by extension, against the other display, or the previous selection.' },
-  { name: 'Set', usage: 'Set VIEW=… | DUAL | DUALVERT | TREE | VIEWER | HIDDEN | FLATVIEW | EXPANDABLEFOLDERS | NAVLOCK | STATUSBAR =on|off|toggle | THEME=dark|light|toggle | SOURCE=toggle | FILTER[=<pattern>] | QUICKFILTER=!prev | FONTSCALE=+10|-10|<percent> | AUTOSIZECOLUMNS | KEYMAP=standard|commander | SORTBY=… [REVERSE]', description: 'Change display and window settings.' },
+  { name: 'Set', usage: 'Set VIEW=… | DUAL | DUALVERT | TREE | VIEWER | FAVBAR | HIDDEN | FLATVIEW | EXPANDABLEFOLDERS | NAVLOCK | STATUSBAR =on|off|toggle | THEME=dark|light|toggle | SOURCE=toggle | FILTER[=<pattern>] | QUICKFILTER=!prev | FONTSCALE=+10|-10|<percent> | AUTOSIZECOLUMNS | KEYMAP=standard|commander | SORTBY=… [REVERSE]', description: 'Change display and window settings.' },
   { name: 'Find', usage: 'Find [PATTERN=<wildcard>] [REPEAT]', description: 'Search for files and folders.' },
   { name: 'GetSizes', usage: 'GetSizes [ALL]', description: 'Calculate folder sizes.' },
   { name: 'Properties', usage: 'Properties', description: 'Show properties, attributes, times and checksums.' },
@@ -394,6 +394,7 @@ const handlers: Record<string, Handler> = {
     if (a.DUALVERT !== undefined) A.setPrefs({ dualVertical: toggleValue(s.prefs.dualVertical, argString(a, 'DUALVERT')) })
     if (a.TREE !== undefined) A.setPrefs({ showTree: toggleValue(s.prefs.showTree, argString(a, 'TREE')) })
     if (a.VIEWER !== undefined) A.setPrefs({ showViewer: toggleValue(s.prefs.showViewer, argString(a, 'VIEWER')) })
+    if (a.FAVBAR !== undefined) A.setPrefs({ showFavoritesBar: toggleValue(s.prefs.showFavoritesBar, argString(a, 'FAVBAR')) })
     if (a.HIDDEN !== undefined) A.setPrefs({ showHidden: toggleValue(s.prefs.showHidden, argString(a, 'HIDDEN')) })
     if (a.FLATVIEW !== undefined) await A.toggleFlatView(pane, toggleValue(activeTab(pane).flat, argString(a, 'FLATVIEW')))
     if (a.THEME !== undefined) {
@@ -682,7 +683,7 @@ function onKeyDown(e: KeyboardEvent): void {
     const fav = A.favoriteForShortcut(combo)
     if (fav) {
       e.preventDefault()
-      void A.navigate(s.activePane, fav.path)
+      void A.openFavorite(s.activePane, fav)
       return
     }
   }

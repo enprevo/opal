@@ -19,6 +19,7 @@ import {
 import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type Favorite, type UiState, type FileEntry, type FolderFormat, type FolderStyle, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
 import { basename, dirname, isAncestor, join, normalize, samePath } from '@shared/paths'
 import { compilePattern } from '@shared/wildcard'
+import { groupsInOrder, insertFavorites, moveFavorites, renameGroup, type FavoriteTarget } from '@shared/favorites'
 import { defaultHotkeys, effectiveHotkeys, hotkeyOverrides, installKeyboard } from './commands'
 
 const api = (): typeof window.opal => window.opal
@@ -1206,6 +1207,103 @@ export async function moveFavoriteToGroup(fav: Favorite): Promise<void> {
 export function toggleFavoriteGroup(group: string): void {
   const cur = getState().prefs.favoritesCollapsed
   setPrefs({ favoritesCollapsed: cur.includes(group) ? cur.filter((g) => g !== group) : [...cur, group] })
+}
+
+// ---------------------------------------------------------------------------
+// Favorites bar: files and folders, groups shown as folders, drag and drop
+// ---------------------------------------------------------------------------
+
+/** Opens a favorite: a folder is shown in the pane (or a new tab), a file is opened with its app. */
+export async function openFavorite(pane: 0 | 1, fav: Favorite, how: 'here' | 'tab' = 'here'): Promise<void> {
+  if (fav.file) {
+    const err = await api().open(fav.path)
+    if (err) toast(err, 'error')
+    return
+  }
+  if (how === 'tab') newTab(pane, fav.path)
+  else await navigate(pane, fav.path)
+}
+
+/** Shows the folder holding a favorite file, with the file focused. */
+export async function showFavoriteInFolder(pane: 0 | 1, fav: Favorite): Promise<void> {
+  const parent = dirname(fav.path)
+  if (parent) await navigate(pane, parent, { focusName: basename(fav.path) })
+}
+
+/** Keeps groups that a move would leave empty, so a folder on the bar doesn't vanish while it is being reorganised. */
+function keepEmptiedGroups(before: Favorite[], after: Favorite[]): void {
+  const left = new Set(after.map((f) => f.group).filter(Boolean))
+  const emptied = groupsInOrder(before).filter((g) => !left.has(g))
+  const extra = getState().prefs.favoriteGroups
+  const missing = emptied.filter((g) => !extra.includes(g))
+  if (missing.length) setPrefs({ favoriteGroups: [...extra, ...missing] })
+}
+
+/** Adds files and folders (dropped on the bar or in a group) to the favorites. */
+export async function addFavoritePaths(paths: string[], target: FavoriteTarget = {}): Promise<void> {
+  const added: Favorite[] = []
+  for (const p of paths) {
+    try {
+      const entry = await api().stat(p)
+      added.push(entry.isDir ? { path: p } : { path: p, file: true })
+    } catch {
+      toast(`Cannot add ${basename(p) || p}: it no longer exists`, 'error')
+    }
+  }
+  if (!added.length) return
+  const { favorites, skipped } = insertFavorites(getState().favorites, added, target)
+  if (favorites !== getState().favorites) saveFavorites(favorites)
+  const n = added.length - skipped
+  const where = target.group ? ` in "${target.group}"` : ''
+  if (n) toast(n === 1 ? `Added to favorites${where}` : `Added ${n} favorites${where}`)
+  else toast(`Already in favorites${where}`)
+}
+
+/** Moves favorites (by list position) on the bar, into a group or out of one. */
+export function moveFavoritesTo(indices: number[], target: FavoriteTarget): void {
+  const before = getState().favorites
+  const after = moveFavorites(before, indices, target)
+  if (after === before) return
+  keepEmptiedGroups(before, after)
+  saveFavorites(after)
+}
+
+/** Moves a whole group (its folder on the bar) before another favorite. */
+export function moveFavoriteGroup(group: string, beforeIndex: number | null): void {
+  const favs = getState().favorites
+  const indices = favs.map((f, i) => (f.group === group ? i : -1)).filter((i) => i >= 0)
+  if (!indices.length) return
+  saveFavorites(moveFavorites(favs, indices, { group, beforeIndex }))
+}
+
+export async function createFavoriteGroup(): Promise<string | null> {
+  const name = await openDialog<string>('prompt', { title: 'New group', label: 'Name of the group (it shows as a folder on the favorites bar)', value: '' })
+  const clean = name?.trim()
+  if (!clean) return null
+  const s = getState()
+  if (groupsInOrder(s.favorites, s.prefs.favoriteGroups).includes(clean)) {
+    toast(`There is already a group named "${clean}"`, 'error')
+    return null
+  }
+  setPrefs({ favoriteGroups: [...s.prefs.favoriteGroups, clean] })
+  return clean
+}
+
+export async function renameFavoriteGroupPrompt(group: string): Promise<void> {
+  const name = await openDialog<string>('prompt', { title: 'Rename group', label: 'Name of the group', value: group })
+  const clean = name?.trim()
+  if (!clean || clean === group) return
+  const s = getState()
+  saveFavorites(renameGroup(s.favorites, group, clean))
+  const swap = (list: string[]): string[] => [...new Set(list.map((g) => (g === group ? clean : g)))]
+  setPrefs({ favoriteGroups: swap(s.prefs.favoriteGroups), favoritesCollapsed: swap(s.prefs.favoritesCollapsed) })
+}
+
+/** Removes a group; its favorites stay, straight on the bar. */
+export function removeFavoriteGroup(group: string): void {
+  const s = getState()
+  saveFavorites(renameGroup(s.favorites, group, ''))
+  setPrefs({ favoriteGroups: s.prefs.favoriteGroups.filter((g) => g !== group), favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => g !== group) })
 }
 
 // ---------------------------------------------------------------------------

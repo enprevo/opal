@@ -227,6 +227,10 @@ export interface Prefs {
   showStatusBar: boolean
   /** Favorite groups collapsed in the sidebar. */
   favoritesCollapsed: string[]
+  /** Horizontal favorites bar under the toolbar. */
+  showFavoritesBar: boolean
+  /** Favorite groups the user created, kept (as empty folders on the bar) even when they hold no favorite. */
+  favoriteGroups: string[]
 }
 
 export interface Favorite {
@@ -237,6 +241,8 @@ export interface Favorite {
   group?: string
   /** Key combination (e.g. "Ctrl+Alt+1") that opens this folder in the active pane. */
   shortcut?: string
+  /** The favorite is a file (opened with its app) rather than a folder (shown in the pane). */
+  file?: boolean
 }
 
 /** Colours the user gave to a folder: its icon and the background of its row (both "#rrggbb"). */
@@ -333,7 +339,9 @@ export const DEFAULT_PREFS: Prefs = {
   keymap: 'standard',
   fontScale: 100,
   showStatusBar: true,
-  favoritesCollapsed: []
+  favoritesCollapsed: [],
+  showFavoritesBar: true,
+  favoriteGroups: []
 }
 
 export type SemanticMatch = 'meaning' | 'words' | 'name'

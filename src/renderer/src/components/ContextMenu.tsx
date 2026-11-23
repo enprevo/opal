@@ -75,8 +75,16 @@ export function ContextMenu() {
   const menu = useStore((s) => s.contextMenu)
   useStore((s) => s.hotkeys)
   if (!menu) return null
+  if (menu.custom) return <MenuPopup x={menu.x} y={menu.y} items={menu.custom.items} root testId={menu.custom.testId} />
   const items = menu.folder ? buildFolderItems(menu.pane, menu.folder.path, menu.folder.favorite) : buildItems(menu.pane, menu.target)
   return <MenuPopup x={menu.x} y={menu.y} items={items} root testId={menu.folder?.favorite ? 'favorite-menu' : menu.folder ? 'folder-menu' : 'context-menu'} />
+}
+
+/** Opens a menu with the given entries at the mouse position. */
+export function openMenu(e: React.MouseEvent, items: MenuEntry[], testId: string): void {
+  e.preventDefault()
+  e.stopPropagation()
+  setState({ contextMenu: { x: e.clientX, y: e.clientY, pane: getState().activePane, target: null, custom: { items, testId } } })
 }
 
 /** Opens the folder menu (path bar, folder tree, favorites) at the mouse position. */

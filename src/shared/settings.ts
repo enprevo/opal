@@ -77,7 +77,8 @@ export function normalizeFavorites(raw: unknown): Favorite[] {
               path: item.path,
               ...(typeof item.label === 'string' && item.label.trim() ? { label: item.label.trim() } : {}),
               ...(typeof item.group === 'string' && item.group.trim() ? { group: item.group.trim() } : {}),
-              ...(isFavoriteShortcut(typeof item.shortcut === 'string' ? item.shortcut.trim() : '') ? { shortcut: (item.shortcut as string).trim() } : {})
+              ...(isFavoriteShortcut(typeof item.shortcut === 'string' ? item.shortcut.trim() : '') ? { shortcut: (item.shortcut as string).trim() } : {}),
+              ...(item.file === true ? { file: true } : {})
             }
           : null
     if (!fav || !fav.path.trim()) continue

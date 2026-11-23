@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Favorites bar under the toolbar. Drag folders and files onto it (from a file list or from the desktop) to add them;
+  click a folder to go into it (middle-click: new tab) and a file to open it with its app. Groups show as folders on
+  the bar with a drop-down list: drop items on a group to put them in it, or hold the drag there to open it and drop at
+  an exact place. Items and groups are reordered by dragging. Right-click for rename, move to group, show a file in
+  its folder, new group, remove group (its favorites stay) and hiding the bar. The bar and the sidebar Favorites show
+  the same list; file favorites are opened from the sidebar too. Show or hide it in Settings → Appearance, with the
+  optional "Fav bar" toolbar button or `Set FAVBAR=toggle`.
 - Right-click a folder name in the path bar, the folder tree or the Favorites section for a folder menu: Properties,
   add to favorites with a shortcut key, and a custom color for the folder icon and for the background of its row.
   The same color entries are in the context menu of a folder in the file list.

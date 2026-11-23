@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { AppInfo } from '../../../preload'
+import type { MenuEntry } from '../components/ContextMenu'
 import {
   DEFAULT_LABELS,
   DEFAULT_PREFS,
@@ -93,7 +94,15 @@ export interface AppState {
   jobs: Record<string, JobProgress>
   dialog: DialogRequest | null
   /** `folder` is set when the menu was opened on a folder name (path bar, folder tree, favorites) instead of a list item. */
-  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null; folder?: { path: string; favorite?: Favorite } } | null
+  contextMenu: {
+    x: number
+    y: number
+    pane: 0 | 1
+    target: FileEntry | null
+    folder?: { path: string; favorite?: Favorite }
+    /** A menu with its own entries (favorites bar: files, groups, the bar itself). */
+    custom?: { items: MenuEntry[]; testId: string }
+  } | null
   toasts: Toast[]
   undoLabel: string
   cliOpen: boolean

@@ -30,7 +30,7 @@ understands what your documents are *about*, without sending anything to the clo
 
 | | |
 | --- | --- |
-| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, favorites in collapsible groups with their own shortcut keys, folder colours (icon and row background), recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
+| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, a favorites bar for folders and files (drag them in, groups as drop-down folders), favorites in collapsible groups with their own shortcut keys, folder colours (icon and row background), recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
 | **Expandable folders** | In Details view folders open in place like a tree: <kbd>→</kbd> expands, <kbd>←</kbd> collapses or jumps to the parent. Copying nested items asks whether to recreate the structure. |
 | **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, syntax-highlighted code with line numbers, archive contents, folder sizes — and use the arrow keys to flip through files. |
 | **Column view** | Finder-style Miller columns with a preview column. |

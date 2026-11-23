@@ -201,6 +201,9 @@ export function PrefsDialog() {
                 <Check label="Grid lines between columns" checked={prefs.gridLines} onChange={(v) => set({ gridLines: v })} />
                 <Check label="Status bar under each file display" checked={prefs.showStatusBar} onChange={(v) => set({ showStatusBar: v })} />
               </Row>
+              <Row label="Favorites bar" desc="A bar under the toolbar with your favorite files and folders; drag items onto it to add them">
+                <Check label="Show the favorites bar" checked={prefs.showFavoritesBar} onChange={(v) => set({ showFavoritesBar: v })} />
+              </Row>
               <Row label="Window layout" desc="Quick presets for panes, tree and viewer">
                 <LayoutPicker onPick={(l) => A.applyLayout(l)} />
               </Row>
