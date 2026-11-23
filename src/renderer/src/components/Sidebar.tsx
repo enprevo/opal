@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ChevronDown, Star, X, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock } from 'lucide-react'
+import { ChevronRight, ChevronDown, Star, X, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock, Settings2 } from 'lucide-react'
 import { activeTab, getState, openDialog, useStore } from '../state/store'
 import * as A from '../state/actions'
 import type { Favorite, FileEntry, RootInfo } from '@shared/types'
 import { basename, dirname, isAncestor, samePath } from '@shared/paths'
 import { readDragPaths, focusList } from './FileDisplay'
 import { keyFor } from '../state/commands'
-import { openFolderMenu } from './ContextMenu'
+import { openFolderMenu, openMenu } from './ContextMenu'
 import { openFavoriteFileMenu } from './FavoritesBar'
 
 interface NodeData {
@@ -31,6 +31,7 @@ function placeIcon(r: RootInfo) {
 export function Sidebar() {
   const roots = useStore((s) => s.roots)
   const recent = useStore((s) => s.recent)
+  const favBar = useStore((s) => s.prefs.showFavoritesBar)
   useStore((s) => s.hotkeys)
   const pane = useStore((s) => s.activePane)
   const currentPath = useStore((s) => activeTab(s.activePane, s).path)
@@ -40,7 +41,8 @@ export function Sidebar() {
 
   return (
     <div className="sidebar">
-      <FavoritesSection pane={pane} currentPath={currentPath} />
+      {/* With the favorites bar shown, favorites live there only. */}
+      {!favBar && <FavoritesSection pane={pane} currentPath={currentPath} />}
       <div className="sb-section">
         <div className="sb-title">Places</div>
         {places.map((r) => (
@@ -130,7 +132,9 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
   }, [favorites, extraGroups])
   return (
     <div className="sb-section" data-testid="favorites-section">
-      <div className="sb-title">Favorites</div>
+      <div className="sb-title" onContextMenu={(e) => openMenu(e, [{ icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites', testId: 'favorites-edit', action: () => void A.editFavorites() }], 'favorites-title-menu')}>
+        Favorites
+      </div>
       {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder; or drag files and folders onto the favorites bar</div>}
       {(groups.get('') ?? []).map((f, i) => (
         <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} />

@@ -37,12 +37,12 @@ test('every setting survives export → new profile → import', async () => {
   // A grouped, renamed favorite (UI).
   await (await item(pa, 0, 'docs')).dblclick()
   await pa.keyboard.press('ControlOrMeta+D')
-  await expect(pa.getByTestId('favorite-item')).toHaveCount(1)
-  await pa.getByTestId('favorite-item').click({ button: 'right' })
+  await expect(pa.getByTestId('favbar-item')).toHaveCount(1)
+  await pa.getByTestId('favbar-item').click({ button: 'right' })
   await pa.getByTestId('favorite-rename').click()
   await pa.getByTestId('prompt-input').fill('My documents')
   await pa.getByTestId('prompt-ok').click()
-  await expect(pa.getByTestId('favorite-item')).toHaveText(/My documents/)
+  await expect(pa.getByTestId('favbar-item')).toHaveText(/My documents/)
 
   // Hotkeys, window layout, column widths, rename presets and semantic folders through the settings bridge.
   await pa.evaluate(
@@ -76,7 +76,7 @@ test('every setting survives export → new profile → import', async () => {
   await expect(pb.locator('html')).toHaveAttribute('data-theme', 'light', { timeout: 15000 })
   await pb.waitForSelector('[data-testid="list-0"]')
   expect(await pb.evaluate(() => document.documentElement.style.getPropertyValue('--accent'))).toBe('#ff375f')
-  await expect(pb.getByTestId('favorite-item')).toHaveText(/My documents/)
+  await expect(pb.getByTestId('favbar-item')).toHaveText(/My documents/)
   await expect(pb.locator('.sidebar-wrap')).toHaveAttribute('style', /width: 333px/)
   const st = await pb.evaluate(() => window.opal.getSettings())
   expect(st.hotkeys).toMatchObject({ 'Ctrl+J': 'Set THEME=toggle', 'Ctrl+K': '' })

@@ -1299,6 +1299,21 @@ export async function renameFavoriteGroupPrompt(group: string): Promise<void> {
   setPrefs({ favoriteGroups: swap(s.prefs.favoriteGroups), favoritesCollapsed: swap(s.prefs.favoritesCollapsed) })
 }
 
+/** Opens "Edit favorites" (names, groups, order, shortcuts). */
+export async function editFavorites(): Promise<void> {
+  setState({ contextMenu: null })
+  await openDialog('favorites')
+}
+
+/** Saves the result of "Edit favorites": the whole list and every group (empty ones are kept as folders on the bar). */
+export function saveFavoritesEdit(favorites: Favorite[], groups: string[]): void {
+  saveFavorites(favorites)
+  const s = getState()
+  const kept = new Set(groups)
+  setPrefs({ favoriteGroups: [...kept], favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => kept.has(g)) })
+  toast('Favorites saved')
+}
+
 /** Removes a group; its favorites stay, straight on the bar. */
 export function removeFavoriteGroup(group: string): void {
   const s = getState()

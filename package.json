@@ -34,9 +34,10 @@
     "node": ">=22.12"
   },
   "scripts": {
-    "dev": "node build/run-electron-vite.mjs dev",
+    "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "start": "node build/run-electron-vite.mjs preview",
+    "start": "electron-vite preview",
+    "postinstall": "node build/linux-dev-sandbox.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

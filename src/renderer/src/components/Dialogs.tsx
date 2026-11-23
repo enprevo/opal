@@ -12,6 +12,7 @@ import { fileTypeLabel } from '@shared/filetypes'
 import { PrefsDialog, SetupDialog } from './Settings'
 import { SemanticDialog, TaggedDialog } from './SemanticSearch'
 import { FileIcon } from './FileIcon'
+import { FavoritesEditor } from './FavoritesEditor'
 
 export function DialogHost() {
   const dialog = useStore((s) => s.dialog)
@@ -45,6 +46,9 @@ export function DialogHost() {
       break
     case 'properties':
       body = <PropertiesDialog {...(p as { entries: FileEntry[] })} />
+      break
+    case 'favorites':
+      body = <FavoritesEditor />
       break
     case 'folderOptions':
       body = <FolderOptionsDialog {...(p as { path: string })} />
@@ -538,7 +542,7 @@ function toLocalInput(ms: number): string {
 }
 
 /** Click, then press the key combination that should open the folder. Backspace clears it, Escape cancels. */
-function ShortcutField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ShortcutField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [recording, setRecording] = useState(false)
   return (
     <button

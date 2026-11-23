@@ -38,8 +38,8 @@ test('favorites bar: drag folders and files in, open them, group them in a folde
   await expect(items.nth(1)).toHaveText('note.txt')
   await expect(p.getByTestId('favbar-hint')).toHaveCount(0)
   await expect.poll(async () => (await saved(p)).favorites).toEqual([{ path: docs }, { path: note, file: true }])
-  // The sidebar lists the same favorites.
-  await expect(p.getByTestId('favorite-item')).toHaveCount(2)
+  // With the bar shown, favorites are not repeated in the sidebar.
+  await expect(p.getByTestId('favorites-section')).toHaveCount(0)
 
   // Dropping the same item again does not double it.
   await (await item(p, 0, 'docs')).dragTo(bar)
@@ -103,4 +103,74 @@ test('favorites bar: drag folders and files in, open them, group them in a folde
   await p.getByTestId('favbar-hide').click()
   await expect(bar).toHaveCount(0)
   await expect.poll(async () => (await saved(p)).prefs.showFavoritesBar).toBe(false)
+  // Without the bar, the sidebar lists the favorites again.
+  await expect(p.getByTestId('favorite-item')).toHaveCount(3)
+})
+
+test('edit favorites: right-click the bar, rename, regroup, reorder, set a shortcut, remove', async () => {
+  h = await launch(async (left) => {
+    await write(path.join(left, 'docs', 'a.txt'), 'a')
+    await write(path.join(left, 'music', 'b.txt'), 'b')
+    await write(path.join(left, 'note.txt'), 'n')
+    await write(
+      path.join(left, '..', 'userdata', 'opal-settings.json'),
+      JSON.stringify({
+        prefs: {},
+        favorites: [{ path: path.join(left, 'docs') }, { path: path.join(left, 'music') }, { path: path.join(left, 'note.txt'), file: true }],
+        recent: []
+      })
+    )
+  })
+  const p = h.page
+  const bar = p.getByTestId('favorites-bar')
+  const docs = path.join(h.left, 'docs')
+  const music = path.join(h.left, 'music')
+  await expect(bar.getByTestId('favbar-item')).toHaveText(['docs', 'music', 'note.txt'])
+
+  // Right-click on an item (or on the bar) offers "Edit favorites".
+  await bar.getByTestId('favbar-item').first().click({ button: 'right' })
+  await p.getByTestId('favorites-edit').click()
+  const ed = p.getByTestId('favorites-editor')
+  await expect(ed).toBeVisible()
+  const rows = ed.getByTestId('fe-row')
+  await expect(rows).toHaveCount(3)
+
+  // Rename docs, move music up, remove the file.
+  await rows.nth(0).getByTestId('fe-name').fill('Documents')
+  await rows.nth(1).getByTestId('fe-up').click()
+  await ed.locator('[data-testid="fe-row"][data-path$="note.txt"]').getByTestId('fe-remove').click()
+  await expect(rows).toHaveCount(2)
+
+  // A new group, with docs in it.
+  await ed.getByTestId('fe-add-group').click()
+  await ed.getByTestId('fe-group-name').fill('Work')
+  await ed.locator(`[data-testid="fe-row"][data-path="${docs}"]`).getByTestId('fe-group').selectOption({ label: 'Work' })
+
+  // A shortcut taken by a command is refused until it is changed.
+  const musicRow = ed.locator(`[data-testid="fe-row"][data-path="${music}"]`)
+  await musicRow.getByTestId('shortcut-field').click()
+  await p.keyboard.press('Control+c')
+  await expect(ed.getByTestId('fe-problem')).toBeVisible()
+  await expect(ed.getByTestId('fe-save')).toBeDisabled()
+  await musicRow.getByTestId('shortcut-field').click()
+  await p.keyboard.press('Control+Alt+m')
+  await expect(ed.getByTestId('fe-problem')).toHaveCount(0)
+
+  await ed.getByTestId('fe-save').click()
+  await expect(ed).toHaveCount(0)
+  await expect.poll(async () => (await saved(p)).favorites).toEqual([
+    { path: music, shortcut: 'Ctrl+Alt+M' },
+    { path: docs, label: 'Documents', group: 'Work' }
+  ])
+  await expect(bar.getByTestId('favbar-item')).toHaveText(['music'])
+  await bar.getByTestId('favbar-group').click()
+  await expect(p.getByTestId('favbar-dropdown-item')).toHaveText(['Documents'])
+
+  // Cancel leaves everything as it was.
+  await p.keyboard.press('Escape')
+  await bar.click({ button: 'right', position: { x: (await bar.boundingBox())!.width - 60, y: 10 } })
+  await p.getByTestId('favorites-edit').click()
+  await p.getByTestId('favorites-editor').getByTestId('fe-remove').first().click()
+  await p.getByTestId('favorites-editor').getByRole('button', { name: 'Cancel' }).click()
+  await expect(bar.getByTestId('favbar-item')).toHaveText(['music'])
 })

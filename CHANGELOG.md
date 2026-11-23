@@ -14,6 +14,21 @@ All notable changes to this project are documented here. The format follows
   its folder, new group, remove group (its favorites stay) and hiding the bar. The bar and the sidebar Favorites show
   the same list; file favorites are opened from the sidebar too. Show or hide it in Settings → Appearance, with the
   optional "Fav bar" toolbar button or `Set FAVBAR=toggle`.
+- "Edit favorites…" in the right-click menu of the favorites bar, its items and groups (and of the sidebar
+  Favorites): one window to rename favorites, change their order and group, give them shortcuts, add folders, create,
+  rename or remove groups and remove favorites. Nothing changes until Save.
+
+### Changed
+
+- While the favorites bar is shown, the sidebar no longer repeats the Favorites section; hiding the bar brings it back.
+- More room around the toolbar buttons, the favorites bar and the items of right-click menus.
+
+### Development
+
+- Linux: `npm install` checks whether the system blocks the Chromium sandbox for the Electron in `node_modules`
+  (Ubuntu 23.10+ with AppArmor, helper not setuid root). Only then that Electron is started with `--no-sandbox`, so
+  `npm start`, `npm run dev` and tools that run it directly no longer abort at once. Installed packages and Windows
+  and macOS are unchanged.
 - Right-click a folder name in the path bar, the folder tree or the Favorites section for a folder menu: Properties,
   add to favorites with a shortcut key, and a custom color for the folder icon and for the background of its row.
   The same color entries are in the context menu of a folder in the file list.

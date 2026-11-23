@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ExternalLink, EyeOff, Folder, FolderInput, FolderPlus, Link, ListTree, PencilLine, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
+import { Settings2, ChevronDown, ExternalLink, EyeOff, Folder, FolderInput, FolderPlus, Link, ListTree, PencilLine, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
 import { activeTab, getState, useStore } from '../state/store'
 import * as A from '../state/actions'
 import type { Favorite } from '@shared/types'
@@ -66,7 +66,9 @@ function fileMenu(pane: 0 | 1, fav: Favorite): MenuEntry[] {
     'sep',
     { icon: PencilLine, label: 'Rename favorite…', desc: 'The name shown on the bar and in the sidebar', testId: 'favorite-rename', action: () => void A.renameFavorite(fav) },
     { icon: ListTree, label: 'Move to group…', desc: 'Put the favorite in a group (a folder on the bar)', action: () => void A.moveFavoriteToGroup(fav) },
-    { icon: StarOff, label: 'Remove from favorites', desc: 'Stop listing this file in the favorites', danger: true, testId: 'favorite-remove', action: () => A.removeFavorite(fav) }
+    { icon: StarOff, label: 'Remove from favorites', desc: 'Stop listing this file in the favorites', danger: true, testId: 'favorite-remove', action: () => A.removeFavorite(fav) },
+    'sep',
+    { icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites, and give them shortcuts, in one window', testId: 'favorites-edit', action: () => void A.editFavorites() }
   ]
 }
 
@@ -81,7 +83,8 @@ function groupMenu(name: string, open: () => void): MenuEntry[] {
     { icon: PencilLine, label: 'Rename group…', desc: 'The name of the folder on the bar', testId: 'favbar-group-rename', action: () => void A.renameFavoriteGroupPrompt(name) },
     { icon: Trash2, label: 'Remove group', desc: 'Remove the folder from the bar; its favorites stay, straight on the bar', danger: true, testId: 'favbar-group-remove', action: () => A.removeFavoriteGroup(name) },
     'sep',
-    { icon: FolderPlus, label: 'New group…', desc: 'A folder on the bar to keep favorites together', action: () => void A.createFavoriteGroup() }
+    { icon: FolderPlus, label: 'New group…', desc: 'A folder on the bar to keep favorites together', action: () => void A.createFavoriteGroup() },
+    { icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites, and give them shortcuts, in one window', testId: 'favorites-edit', action: () => void A.editFavorites() }
   ]
 }
 
@@ -90,6 +93,8 @@ function barMenu(): MenuEntry[] {
   const cur = activeTab(s.activePane, s).path
   const has = A.isFavorite(cur)
   return [
+    { icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites, and give them shortcuts, in one window', testId: 'favorites-edit', action: () => void A.editFavorites() },
+    'sep',
     { icon: has ? StarOff : Star, label: has ? 'Remove current folder' : 'Add current folder', desc: 'The folder shown in the active pane', action: () => A.toggleFavorite(cur) },
     { icon: FolderPlus, label: 'New group…', desc: 'A folder on the bar to keep favorites together', testId: 'favbar-new-group-menu', action: () => void A.createFavoriteGroup() },
     'sep',

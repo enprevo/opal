@@ -95,8 +95,8 @@ test('favorite with a shortcut: set from the folder tree, opens the folder from 
   await p.getByTestId('folder-options-ok').click()
   await expect(dialog).toHaveCount(0)
 
-  await expect(p.getByTestId('favorite-item')).toHaveCount(1)
-  await expect(p.getByTestId('favorite-shortcut')).toHaveText('Ctrl+Alt+K')
+  await expect(p.getByTestId('favbar-item')).toHaveCount(1)
+  await expect(p.getByTestId('favbar-item')).toHaveAttribute('data-help-desc', /Ctrl\+Alt\+K/)
   const saved = await p.evaluate(() => window.opal.getSettings())
   expect(saved.favorites).toEqual([{ path: h!.left, shortcut: 'Ctrl+Alt+K' }])
   expect(saved.folderStyles?.[h.left]).toEqual({ bg: '#4a8cf7' })
@@ -117,10 +117,10 @@ test('favorite with a shortcut: set from the folder tree, opens the folder from 
   await p.getByTestId('folder-options-dialog').getByRole('button', { name: 'Cancel' }).click()
 
   // Removing the favorite frees the shortcut.
-  await p.getByTestId('favorite-item').click({ button: 'right' })
+  await p.getByTestId('favbar-item').click({ button: 'right' })
   await expect(p.getByTestId('favorite-menu')).toBeVisible()
   await p.getByTestId('folder-unfavorite').click()
-  await expect(p.getByTestId('favorite-item')).toHaveCount(0)
+  await expect(p.getByTestId('favbar-item')).toHaveCount(0)
   await p.keyboard.press('Control+Alt+k')
   await expect(crumbs.last()).toHaveText('docs')
 })

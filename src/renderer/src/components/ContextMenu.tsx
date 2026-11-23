@@ -46,7 +46,8 @@ import {
   Keyboard,
   Palette,
   PaintBucket,
-  StarOff
+  StarOff,
+  Settings2
 } from 'lucide-react'
 import { activeTab, getState, setState, useStore } from '../state/store'
 import { keyFor, runCommand } from '../state/commands'
@@ -279,7 +280,8 @@ function buildFolderItems(pane: 0 | 1, path: string, favoriteEntry?: Favorite): 
       ? ([
           'sep',
           { icon: PencilLine, label: 'Rename favorite…', desc: 'The name shown in the sidebar', testId: 'favorite-rename', action: () => void A.renameFavorite(favoriteEntry) },
-          { icon: ListTree, label: 'Move to group…', desc: 'Put the favorite in a collapsible group', action: () => void A.moveFavoriteToGroup(favoriteEntry) }
+          { icon: ListTree, label: 'Move to group…', desc: 'Put the favorite in a collapsible group', action: () => void A.moveFavoriteToGroup(favoriteEntry) },
+          { icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites, and give them shortcuts, in one window', testId: 'favorites-edit', action: () => void A.editFavorites() }
         ] as MenuEntry[])
       : [])
   ]
