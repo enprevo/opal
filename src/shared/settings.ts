@@ -109,6 +109,14 @@ export function normalizeFolderStyles(raw: unknown): Record<string, FolderStyle>
   return out
 }
 
+/** Colours of the favorites groups: group name → "#rrggbb" (anything else is dropped). */
+export function normalizeGroupColors(raw: unknown): Record<string, string> | undefined {
+  if (!isObj(raw)) return undefined
+  const out: Record<string, string> = {}
+  for (const [g, c] of Object.entries(raw)) if (g.trim() && isHexColor(c)) out[g.trim()] = c.toLowerCase()
+  return out
+}
+
 function normalizeLabelDefs(raw: unknown): LabelDef[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const defs = raw.filter((d): d is LabelDef => isObj(d) && typeof d.id === 'string' && typeof d.name === 'string' && typeof d.color === 'string')
@@ -160,6 +168,8 @@ export function normalizeState(raw: unknown): PersistedState {
   if (defs) state.labelDefs = defs
   const folderStyles = normalizeFolderStyles(r.folderStyles)
   if (folderStyles) state.folderStyles = folderStyles
+  const groupColors = normalizeGroupColors(r.favoriteGroupColors)
+  if (groupColors) state.favoriteGroupColors = groupColors
   if (isObj(r.folderFormats)) state.folderFormats = r.folderFormats as PersistedState['folderFormats']
   if (isObj(r.session) && Array.isArray(r.session.panes)) state.session = r.session as unknown as PersistedState['session']
   if (r.hotkeys !== undefined) state.hotkeys = stringMap(r.hotkeys)

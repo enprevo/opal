@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { SettingsStore } from '../../src/main/settings'
-import { fromImport, isFavoriteShortcut, normalizeFavorites, normalizeFolderStyles, normalizeState, toExport } from '../../src/shared/settings'
+import { fromImport, isFavoriteShortcut, normalizeFavorites, normalizeFolderStyles, normalizeGroupColors, normalizeState, toExport } from '../../src/shared/settings'
 import { DEFAULT_PREFS } from '../../src/shared/types'
 import { effectiveHotkeys, hotkeyOverrides } from '../../src/renderer/src/state/commands'
 
@@ -159,5 +159,15 @@ describe('folder colors', () => {
     const back = fromImport(exported, normalizeState({}))
     expect(back.folderStyles).toEqual({ '/a': { bg: '#26b5a5' } })
     expect(back.favorites).toEqual([{ path: '/a', shortcut: 'Ctrl+Alt+9' }])
+  })
+})
+
+describe('favorites group colors', () => {
+  it('keeps valid colors by group name, lower-cased, and survives export → import', () => {
+    expect(normalizeGroupColors({ Work: '#A66BE6', Music: 'blue', '': '#ef5350', Old: 3 })).toEqual({ Work: '#a66be6' })
+    expect(normalizeState({}).favoriteGroupColors).toBeUndefined()
+    const st = normalizeState({ prefs: {}, favoriteGroupColors: { Work: '#43b86a' } })
+    const back = fromImport(JSON.parse(JSON.stringify(toExport(st, '1.0.0', 'linux'))), normalizeState({}))
+    expect(back.favoriteGroupColors).toEqual({ Work: '#43b86a' })
   })
 })

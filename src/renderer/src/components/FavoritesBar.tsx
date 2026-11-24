@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Settings2, ChevronDown, ExternalLink, EyeOff, Folder, FolderInput, FolderPlus, Link, ListTree, PencilLine, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
+import { Settings2, ChevronDown, ExternalLink, EyeOff, Folder, FolderInput, FolderPlus, Link, ListTree, Palette, PencilLine, Star, StarOff, Trash2, FolderOpen } from 'lucide-react'
 import { activeTab, getState, useStore } from '../state/store'
 import * as A from '../state/actions'
 import type { Favorite } from '@shared/types'
@@ -7,7 +7,7 @@ import { barSlots, slotIndex, type BarSlot, type FavoriteTarget, type IndexedFav
 import { basename, samePath } from '@shared/paths'
 import { readDragPaths } from './FileDisplay'
 import { FileIcon } from './FileIcon'
-import { openFolderMenu, openMenu, type MenuEntry } from './ContextMenu'
+import { groupColorSubmenu, openFolderMenu, openMenu, type MenuEntry } from './ContextMenu'
 
 /** Drag data of a favorite (or a whole group) picked up on the bar. */
 const FAV_TYPE = 'application/x-opal-favorite'
@@ -81,6 +81,13 @@ function groupMenu(name: string, open: () => void): MenuEntry[] {
   return [
     { icon: FolderOpen, label: 'Open group', desc: 'Show the favorites of this group', action: open },
     { icon: PencilLine, label: 'Rename group…', desc: 'The name of the folder on the bar', testId: 'favbar-group-rename', action: () => void A.renameFavoriteGroupPrompt(name) },
+    {
+      icon: Palette,
+      label: 'Folder color',
+      desc: 'Color of this folder on the bar, in the sidebar and in Edit favorites',
+      testId: 'favbar-group-color',
+      submenu: groupColorSubmenu(getState().favoriteGroupColors[name], (c) => A.setFavoriteGroupColor(name, c))
+    },
     { icon: Trash2, label: 'Remove group', desc: 'Remove the folder from the bar; its favorites stay, straight on the bar', danger: true, testId: 'favbar-group-remove', action: () => A.removeFavoriteGroup(name) },
     'sep',
     { icon: FolderPlus, label: 'New group…', desc: 'A folder on the bar to keep favorites together', action: () => void A.createFavoriteGroup() },
@@ -108,6 +115,7 @@ type DropAt = { slot: number; edge: 'before' | 'after' | 'into' } | { end: true 
 export function FavoritesBar() {
   const favorites = useStore((s) => s.favorites)
   const extraGroups = useStore((s) => s.prefs.favoriteGroups)
+  const groupColors = useStore((s) => s.favoriteGroupColors)
   const pane = useStore((s) => s.activePane)
   const currentPath = useStore((s) => activeTab(s.activePane, s).path)
   const slots = useMemo(() => barSlots(favorites, extraGroups), [favorites, extraGroups])
@@ -261,7 +269,7 @@ export function FavoritesBar() {
             onDragOver={(e) => onSlotDragOver(e, k, slot)}
             onDrop={(e) => onSlotDrop(e, k)}
           >
-            <Folder size={14} className="fb-group-icon" />
+            <Folder size={14} className="fb-group-icon" style={groupColors[slot.name] ? { color: groupColors[slot.name] } : undefined} />
             <span className="fb-label">{slot.name}</span>
             <ChevronDown size={12} className="fb-chevron" />
           </button>
@@ -340,6 +348,7 @@ function FavButton({
 /** The list of a group, opened under its folder on the bar. */
 function GroupDropdown({ slot, x, y, pane, currentPath, onClose }: { slot: Extract<BarSlot, { kind: 'group' }>; x: number; y: number; pane: 0 | 1; currentPath: string; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  const color = useStore((s) => s.favoriteGroupColors[slot.name])
   const [left, setLeft] = useState(x)
   const [drop, setDrop] = useState<{ index: number; edge: 'before' | 'after' } | 'end' | null>(null)
 
@@ -412,7 +421,7 @@ function GroupDropdown({ slot, x, y, pane, currentPath, onClose }: { slot: Extra
       onDrop={dropHere}
     >
       <div className="fb-dd-title">
-        <Folder size={12} /> {slot.name}
+        <Folder size={12} style={color ? { color } : undefined} /> {slot.name}
       </div>
       {slot.items.length === 0 && (
         <div className="fb-dd-empty" data-testid="favbar-dropdown-empty">

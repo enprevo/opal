@@ -231,6 +231,8 @@ export interface Prefs {
   showFavoritesBar: boolean
   /** Favorite groups the user created, kept (as empty folders on the bar) even when they hold no favorite. */
   favoriteGroups: string[]
+  /** Sidebar sections the user closed (favorites, places, folders, labels). */
+  sidebarCollapsed: string[]
 }
 
 export interface Favorite {
@@ -279,6 +281,8 @@ export interface PersistedState {
   labelDefs?: LabelDef[]
   /** Custom icon / row colours, by folder path. */
   folderStyles?: Record<string, FolderStyle>
+  /** Colour of each favorites group's folder icon ("#rrggbb"), by group name. */
+  favoriteGroupColors?: Record<string, string>
   folderFormats?: Record<string, FolderFormat>
   session?: { panes: SessionPane[]; activePane: number }
   /** Changes to the default key bindings: combo → command, or '' for a default binding that was removed. */
@@ -341,7 +345,8 @@ export const DEFAULT_PREFS: Prefs = {
   showStatusBar: true,
   favoritesCollapsed: [],
   showFavoritesBar: true,
-  favoriteGroups: []
+  favoriteGroups: [],
+  sidebarCollapsed: []
 }
 
 export type SemanticMatch = 'meaning' | 'words' | 'name'

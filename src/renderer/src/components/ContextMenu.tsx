@@ -224,6 +224,22 @@ function labelSubmenu(paths: string[]): MenuEntry[] {
   ]
 }
 
+/** Colour choices for the folder of a favorites group; `pick(null)` goes back to the default colour. */
+export function groupColorSubmenu(current: string | undefined, pick: (color: string | null) => void): MenuEntry[] {
+  return [
+    ...FOLDER_COLORS.map((c) => ({
+      color: c.color,
+      label: c.name,
+      desc: `Show this folder in ${c.name.toLowerCase()}`,
+      checked: current === c.color,
+      testId: `group-color-${c.name.toLowerCase()}`,
+      action: () => pick(c.color)
+    })),
+    'sep' as const,
+    { icon: CircleOff, label: 'Default', desc: 'Back to the standard folder color', checked: !current, testId: 'group-color-default', action: () => pick(null) }
+  ]
+}
+
 /** Colour choices for a folder's icon (`key` 'color') or the background of its row ('bg'). */
 function folderColorSubmenu(path: string, key: 'color' | 'bg'): MenuEntry[] {
   const cur = getState().folderStyles[path]?.[key]

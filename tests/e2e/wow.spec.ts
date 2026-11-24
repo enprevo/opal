@@ -148,6 +148,60 @@ test('labels from the context menu, sidebar count and tagged list', async () => 
   await expect(page.getByTestId('tagged-dialog')).toContainText('cake.txt')
 })
 
+test('labels sit under the folders, can be renamed, recolored, added and deleted, and sections fold', async () => {
+  h = await launch(fixture)
+  const { page } = h
+  const saved = () => page.evaluate(() => window.opal.getSettings())
+  const section = page.getByTestId('labels-section')
+  const folders = page.getByTestId('folders-section')
+  // Labels come after the folder tree.
+  expect((await box(section)).y).toBeGreaterThan((await box(folders)).y)
+
+  // Label an item, then rename and recolor its label from the sidebar.
+  await (await item(page, 0, 'cake.txt')).click({ button: 'right' })
+  await page.getByTestId('context-menu').getByText('Label', { exact: true }).hover()
+  await page.getByTestId('label-red').click()
+  const red = section.locator('[data-label="red"]')
+  await red.click({ button: 'right' })
+  await page.getByTestId('label-rename').click()
+  await page.getByTestId('prompt-input').fill('Urgent')
+  await page.getByTestId('prompt-ok').click()
+  await expect(red).toContainText('Urgent')
+  await red.click({ button: 'right' })
+  await page.getByTestId('label-color').hover()
+  await page.getByTestId('label-color-teal').click()
+  await expect(red.locator('.cm-color')).toHaveCSS('background-color', 'rgb(38, 181, 165)')
+  await expect.poll(async () => (await saved()).labelDefs?.find((l) => l.id === 'red')).toEqual({ id: 'red', name: 'Urgent', color: '#26b5a5' })
+  // The new name shows in the item's menu too.
+  await (await item(page, 0, 'cake.txt')).click({ button: 'right' })
+  await page.getByTestId('context-menu').getByText('Label', { exact: true }).hover()
+  await expect(page.getByTestId('label-red')).toContainText('Urgent')
+  await page.keyboard.press('Escape')
+
+  // A new label, from the + beside the title.
+  await section.getByTestId('sb-title-labels').hover()
+  await section.getByTestId('label-add').click()
+  await page.getByTestId('prompt-input').fill('Clients')
+  await page.getByTestId('prompt-ok').click()
+  await expect(section.getByTestId('sb-label').last()).toContainText('Clients')
+
+  // Deleting a label in use asks first, then takes it off the item.
+  await red.click({ button: 'right' })
+  await page.getByTestId('label-delete').click()
+  await page.getByTestId('confirm-ok').click()
+  await expect(red).toHaveCount(0)
+  await expect(page.locator('[data-testid="list-0"] .item', { hasText: 'cake.txt' }).getByTestId('label-dots')).toHaveCount(0)
+
+  // Sections open and close from their title, and stay that way.
+  await page.getByTestId('sb-title-labels').click()
+  await expect(section.getByTestId('sb-label')).toHaveCount(0)
+  await page.getByTestId('sb-title-folders').click()
+  await expect(folders.locator('.sb-title ~ *')).toHaveCount(0)
+  await expect.poll(async () => (await saved()).prefs.sidebarCollapsed).toEqual(['labels', 'folders'])
+  await page.getByTestId('sb-title-labels').click()
+  await expect(section.getByTestId('sb-label').first()).toBeVisible()
+})
+
 test('helper cards appear beside the target and never cover it', async () => {
   h = await launch(fixture)
   const { page } = h

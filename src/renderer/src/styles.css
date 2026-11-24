@@ -281,6 +281,61 @@ kbd {
   padding: 4px 10px;
 }
 
+/* Section titles open and close their section. */
+.sb-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sb-toggle:hover {
+  color: var(--text);
+}
+
+.sb-title-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-title-add {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.sb-toggle:hover .sb-title-add,
+.sb-title-add:focus-visible {
+  opacity: 1;
+}
+
+.sb-title-add:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* Labels sit under the folders; a long list scrolls instead of squeezing the folder tree. */
+.sb-labels-section {
+  flex: none;
+  border-top: 1px solid var(--border);
+  border-bottom: none;
+}
+
+.sb-labels {
+  max-height: 32vh;
+  overflow-y: auto;
+}
+
 .sb-empty {
   color: var(--muted);
   font-size: 12px;
@@ -3260,7 +3315,8 @@ button.link:hover {
 }
 
 .fe-tree-item.nested {
-  padding-left: 26px;
+  padding-left: 14px;
+  gap: 6px;
 }
 
 .fe-tree-item:hover {
@@ -3330,9 +3386,9 @@ button.link:hover {
 .fe-row {
   position: relative;
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  grid-template-columns: 16px 22px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 7px 10px;
   border-radius: 7px;
   cursor: default;
@@ -3340,6 +3396,69 @@ button.link:hover {
 
 .fe-row:hover {
   background: var(--hover);
+}
+
+/* The content of a folder shown open under it, indented. */
+.fe-row.child {
+  margin-left: 26px;
+}
+
+.fe-row-empty {
+  margin-left: 62px;
+  padding: 4px 10px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.fe-twisty {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+}
+
+.fe-twisty:hover {
+  background: var(--hover);
+}
+
+.fe-twisty svg {
+  transition: transform 0.12s ease;
+}
+
+.fe-twisty[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.fe-twisty-space {
+  width: 16px;
+}
+
+.fe-tree-leaf {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px 5px 58px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fe-tree-leaf:hover {
+  background: var(--hover);
+}
+
+.fe-tree-leaf.current {
+  color: var(--accent);
 }
 
 .fe-row.selected {

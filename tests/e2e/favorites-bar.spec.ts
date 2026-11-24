@@ -92,11 +92,26 @@ test('favorites bar: drag folders and files in, open them, group them in a folde
   await expect(p.getByTestId('favbar-dropdown')).toHaveCount(0)
   await expect(crumbs.last()).toHaveText('music')
 
-  // Removing the group keeps its favorites on the bar.
+  // The group's folder can be coloured from its menu; the colour follows a rename.
+  await group.click({ button: 'right' })
+  await p.getByTestId('favbar-group-color').hover()
+  await p.getByTestId('group-color-purple').click()
+  await expect(group.locator('.fb-group-icon')).toHaveCSS('color', 'rgb(166, 107, 230)')
+  await expect.poll(async () => (await saved(p)).favoriteGroupColors).toEqual({ Work: '#a66be6' })
+  await group.click({ button: 'right' })
+  await p.getByTestId('favbar-group-rename').click()
+  await p.getByTestId('prompt-input').fill('Job')
+  await p.getByTestId('prompt-ok').click()
+  await expect(group).toHaveText(/Job/)
+  await expect.poll(async () => (await saved(p)).favoriteGroupColors).toEqual({ Job: '#a66be6' })
+  await expect(group.locator('.fb-group-icon')).toHaveCSS('color', 'rgb(166, 107, 230)')
+
+  // Removing the group keeps its favorites on the bar (and forgets its colour).
   await group.click({ button: 'right' })
   await p.getByTestId('favbar-group-remove').click()
   await expect(group).toHaveCount(0)
   await expect(items).toHaveText(['note.txt', 'docs', 'music'])
+  await expect.poll(async () => (await saved(p)).favoriteGroupColors).toEqual({})
 
   // The bar can be hidden from its menu.
   await bar.click({ button: 'right', position: { x: (await bar.boundingBox())!.width - 60, y: 10 } })
@@ -144,20 +159,37 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
   await ed.getByTestId('fe-name-input').press('Enter')
   await expect(tree).toHaveText([/Favorites bar/, /Work/])
 
+  // Colour the new folder from its menu: its icon changes here at once.
+  await tree.nth(1).click({ button: 'right' })
+  await p.getByTestId('fe-menu-color').hover()
+  await p.getByTestId('group-color-green').click()
+  await expect(tree.nth(1).locator('.fb-group-icon')).toHaveCSS('color', 'rgb(67, 184, 106)')
+  await expect(row('[data-group="Work"]').locator('.fb-group-icon')).toHaveCSS('color', 'rgb(67, 184, 106)')
+
   // Drag a favorite onto the folder on the left.
   await row(`[data-path="${docs}"]`).dragTo(tree.nth(1))
-  await expect(row('[data-path]')).toHaveCount(2)
+  await expect(row('[data-path]:not([data-child])')).toHaveCount(2)
   await expect(tree.nth(1)).toContainText('1')
+
+  // A folder shows what is inside it, on the right under its row and on the left under its name; the arrow hides it.
+  await expect(row(`[data-child][data-path="${docs}"]`)).toBeVisible()
+  await expect(ed.getByTestId('fe-tree-item')).toHaveText(['docs'])
+  await row('[data-group="Work"]').getByTestId('fe-twisty').click()
+  await expect(row('[data-child]')).toHaveCount(0)
+  await expect(ed.getByTestId('fe-tree-item')).toHaveCount(0)
+  await ed.getByTestId('fe-tree-twisty').click()
+  await expect(row(`[data-child][data-path="${docs}"]`)).toBeVisible()
 
   // Drag to reorder: note.txt before music.
   await row(`[data-path="${note}"]`).dragTo(row(`[data-path="${music}"]`), { targetPosition: { x: 40, y: 3 } })
-  await expect.poll(() => row('[data-path]').evaluateAll((els) => els.map((e) => e.getAttribute('data-path')))).toEqual([note, music])
+  await expect.poll(() => row('[data-path]:not([data-child])').evaluateAll((els) => els.map((e) => e.getAttribute('data-path')))).toEqual([note, music])
 
   // Right-click → Move to → Work.
   await row(`[data-path="${music}"]`).click({ button: 'right' })
   await p.getByTestId('fe-menu-move').hover()
   await p.getByTestId('fe-move-group').click()
-  await expect(row('[data-path]')).toHaveCount(1)
+  await expect(row('[data-path]:not([data-child])')).toHaveCount(1)
+  await expect(row('[data-child]')).toHaveCount(2)
 
   // Open the folder and rename an item in place (double-click).
   await tree.nth(1).click()
@@ -191,6 +223,8 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
     { path: music, group: 'Work' }
   ])
   await expect(bar.getByTestId('favbar-item')).toHaveText(['note.txt'])
+  await expect.poll(async () => (await saved(p)).favoriteGroupColors).toEqual({ Work: '#43b86a' })
+  await expect(bar.getByTestId('favbar-group').locator('.fb-group-icon')).toHaveCSS('color', 'rgb(67, 184, 106)')
   await bar.getByTestId('favbar-group').click()
   await expect(p.getByTestId('favbar-dropdown-item')).toHaveText(['Documents', 'music'])
 

@@ -16,7 +16,7 @@ import {
   type PaneState,
   type TabState
 } from './store'
-import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type Favorite, type UiState, type FileEntry, type FolderFormat, type FolderStyle, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
+import { DEFAULT_LABELS, DEFAULT_PREFS, FOLDER_COLORS, type ConflictPolicy, type LabelDef, type Favorite, type UiState, type FileEntry, type FolderFormat, type FolderStyle, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
 import { basename, dirname, isAncestor, join, normalize, samePath } from '@shared/paths'
 import { compilePattern } from '@shared/wildcard'
 import { groupsInOrder, insertFavorites, moveFavorites, renameGroup, type FavoriteTarget } from '@shared/favorites'
@@ -75,6 +75,7 @@ export async function bootstrap(): Promise<void> {
     labels: persisted.labels ?? {},
     labelDefs: persisted.labelDefs?.length ? persisted.labelDefs : DEFAULT_LABELS,
     folderStyles: persisted.folderStyles ?? {},
+    favoriteGroupColors: persisted.favoriteGroupColors ?? {},
     folderFormats: persisted.folderFormats ?? {},
     roots,
     panes,
@@ -1297,6 +1298,12 @@ export async function renameFavoriteGroupPrompt(group: string): Promise<void> {
   saveFavorites(renameGroup(s.favorites, group, clean))
   const swap = (list: string[]): string[] => [...new Set(list.map((g) => (g === group ? clean : g)))]
   setPrefs({ favoriteGroups: swap(s.prefs.favoriteGroups), favoritesCollapsed: swap(s.prefs.favoritesCollapsed) })
+  const color = s.favoriteGroupColors[group]
+  if (color) {
+    const colors = { ...s.favoriteGroupColors, [clean]: color }
+    delete colors[group]
+    persistGroupColors(colors)
+  }
 }
 
 /** Opens "Edit favorites" (names, groups, order, shortcuts). */
@@ -1305,13 +1312,32 @@ export async function editFavorites(): Promise<void> {
   await openDialog('favorites')
 }
 
-/** Saves the result of "Edit favorites": the whole list and every group (empty ones are kept as folders on the bar). */
-export function saveFavoritesEdit(favorites: Favorite[], groups: string[]): void {
+/**
+ * Saves the result of "Edit favorites": the whole list and every group (empty ones are kept as folders on the bar),
+ * with the colour of each group's folder.
+ */
+export function saveFavoritesEdit(favorites: Favorite[], groups: string[], colors: Record<string, string> = {}): void {
   saveFavorites(favorites)
   const s = getState()
   const kept = new Set(groups)
   setPrefs({ favoriteGroups: [...kept], favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => kept.has(g)) })
+  const nextColors: Record<string, string> = {}
+  for (const [g, c] of Object.entries(colors)) if (kept.has(g) && c) nextColors[g] = c
+  persistGroupColors(nextColors)
   toast('Favorites saved')
+}
+
+function persistGroupColors(favoriteGroupColors: Record<string, string>): void {
+  setState({ favoriteGroupColors })
+  void api().setSettings({ favoriteGroupColors })
+}
+
+/** Colours the folder of a favorites group (on the bar, in the sidebar and in "Edit favorites"); `null` is the default. */
+export function setFavoriteGroupColor(group: string, color: string | null): void {
+  const colors = { ...getState().favoriteGroupColors }
+  if (color) colors[group] = color
+  else delete colors[group]
+  persistGroupColors(colors)
 }
 
 /** Removes a group; its favorites stay, straight on the bar. */
@@ -1319,6 +1345,7 @@ export function removeFavoriteGroup(group: string): void {
   const s = getState()
   saveFavorites(renameGroup(s.favorites, group, ''))
   setPrefs({ favoriteGroups: s.prefs.favoriteGroups.filter((g) => g !== group), favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => g !== group) })
+  if (s.favoriteGroupColors[group]) setFavoriteGroupColor(group, null)
 }
 
 // ---------------------------------------------------------------------------
@@ -1493,6 +1520,78 @@ export function toggleGroup(pane: 0 | 1, key: string): void {
 // ---------------------------------------------------------------------------
 // Labels (colour tags)
 // ---------------------------------------------------------------------------
+
+/** Opens or closes a section of the sidebar (remembered between sessions). */
+export function toggleSidebarSection(id: string): void {
+  const cur = getState().prefs.sidebarCollapsed
+  setPrefs({ sidebarCollapsed: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] })
+}
+
+function persistLabelDefs(labelDefs: LabelDef[]): void {
+  setState({ labelDefs })
+  void api().setSettings({ labelDefs })
+}
+
+export async function renameLabelPrompt(id: string): Promise<void> {
+  const def = getState().labelDefs.find((l) => l.id === id)
+  if (!def) return
+  const name = await openDialog<string>('prompt', { title: 'Rename label', label: 'Name of the label', value: def.name })
+  const clean = name?.trim()
+  if (!clean || clean === def.name) return
+  if (getState().labelDefs.some((l) => l.id !== id && l.name.toLowerCase() === clean.toLowerCase())) {
+    toast(`There is already a label named "${clean}"`, 'error')
+    return
+  }
+  persistLabelDefs(getState().labelDefs.map((l) => (l.id === id ? { ...l, name: clean } : l)))
+}
+
+export function setLabelColor(id: string, color: string): void {
+  persistLabelDefs(getState().labelDefs.map((l) => (l.id === id ? { ...l, color } : l)))
+}
+
+/** Adds a label (with the first colour no label uses yet). */
+export async function createLabelPrompt(): Promise<void> {
+  const name = await openDialog<string>('prompt', { title: 'New label', label: 'Name of the label', value: '' })
+  const clean = name?.trim()
+  if (!clean) return
+  const defs = getState().labelDefs
+  if (defs.some((l) => l.name.toLowerCase() === clean.toLowerCase())) {
+    toast(`There is already a label named "${clean}"`, 'error')
+    return
+  }
+  let n = defs.length + 1
+  while (defs.some((l) => l.id === `label${n}`)) n++
+  const color = FOLDER_COLORS.find((c) => !defs.some((l) => l.color === c.color))?.color ?? FOLDER_COLORS[defs.length % FOLDER_COLORS.length].color
+  persistLabelDefs([...defs, { id: `label${n}`, name: clean, color }])
+}
+
+/** Removes a label, and takes it off every item that has it (after asking, when some do). */
+export async function deleteLabel(id: string): Promise<void> {
+  const s = getState()
+  const def = s.labelDefs.find((l) => l.id === id)
+  if (!def) return
+  if (s.labelDefs.length <= 1) {
+    toast('Keep at least one label', 'error')
+    return
+  }
+  const used = Object.values(s.labels).filter((ids) => ids.includes(id)).length
+  if (used) {
+    const ok = await openDialog<boolean>('confirm', {
+      title: 'Delete label',
+      message: `Delete the label "${def.name}"? It is removed from ${used === 1 ? '1 item' : `${used} items`}.`,
+      danger: true,
+      okLabel: 'Delete'
+    })
+    if (!ok) return
+    const labels: Record<string, string[]> = {}
+    for (const [p, ids] of Object.entries(getState().labels)) {
+      const next = ids.filter((x) => x !== id)
+      if (next.length) labels[p] = next
+    }
+    persistLabels(labels)
+  }
+  persistLabelDefs(getState().labelDefs.filter((l) => l.id !== id))
+}
 
 function persistLabels(labels: Record<string, string[]>): void {
   setState({ labels })

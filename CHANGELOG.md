@@ -19,12 +19,21 @@ All notable changes to this project are documented here. The format follows
   of the chosen folder on the right. Drag rows to reorder them or onto a folder (left or right) to move them, drag
   folders along the bar, drop files and folders from the desktop, double-click to rename in place (or open a folder),
   right-click for Rename, Move to, Remove; search across all folders; shortcuts are set on each row and refused with
-  the reason when taken. Nothing changes until Save.
+  the reason when taken. Nothing changes until Save. Folders show what is inside them, both under their row on the
+  right and under their name on the left; the arrow beside a folder (or the Left and Right keys) hides and shows it.
+- Colored favorites folders: right-click a group on the favorites bar, in the sidebar or in "Edit favorites" and pick
+  a Folder color (or Default). The color shows on the bar, in its drop-down list, in the sidebar and in "Edit
+  favorites", follows the group when it is renamed, and is kept in exported settings.
+- Editable labels: right-click a label in the sidebar to rename it, change its color or delete it (it is taken off
+  the items that have it, after asking); the + beside the Labels title adds a new one. The sidebar now lists every
+  label.
+- Sidebar sections (Favorites, Places, Folders, Labels) open and close from their title, and stay so between sessions.
 
 ### Changed
 
 - While the favorites bar is shown, the sidebar no longer repeats the Favorites section; hiding the bar brings it back.
 - More room around the toolbar buttons, the favorites bar and the items of right-click menus.
+- Labels are listed under Folders in the sidebar.
 
 ### Development
 

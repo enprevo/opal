@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, ChevronDown, Star, X, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock, Settings2 } from 'lucide-react'
+import { ChevronRight, ChevronDown, Star, X, HardDrive, Home, Folder, Monitor, FileText, Download, ImageIcon, Clock, Settings2, Palette, PencilLine, Plus, Trash2 } from 'lucide-react'
 import { activeTab, getState, openDialog, useStore } from '../state/store'
 import * as A from '../state/actions'
-import type { Favorite, FileEntry, RootInfo } from '@shared/types'
+import { FOLDER_COLORS, type Favorite, type FileEntry, type RootInfo } from '@shared/types'
 import { basename, dirname, isAncestor, samePath } from '@shared/paths'
 import { readDragPaths, focusList } from './FileDisplay'
 import { keyFor } from '../state/commands'
-import { openFolderMenu, openMenu } from './ContextMenu'
+import { groupColorSubmenu, openFolderMenu, openMenu, type MenuEntry } from './ContextMenu'
 import { openFavoriteFileMenu } from './FavoritesBar'
 
 interface NodeData {
@@ -38,36 +38,61 @@ export function Sidebar() {
   const [showRecent, setShowRecent] = useState(false)
   const places = roots.filter((r) => r.kind === 'home' || r.kind === 'special')
   const treeRoots = roots.filter((r) => r.kind === 'drive' || r.kind === 'root' || r.kind === 'volume')
+  const closed = useStore((s) => s.prefs.sidebarCollapsed)
 
   return (
     <div className="sidebar">
       {/* With the favorites bar shown, favorites live there only. */}
       {!favBar && <FavoritesSection pane={pane} currentPath={currentPath} />}
-      <div className="sb-section">
-        <div className="sb-title">Places</div>
-        {places.map((r) => (
-          <div key={r.path} className={`sb-item${samePath(r.path, currentPath) ? ' current' : ''}`} title={r.path} onClick={() => void A.navigate(pane, r.path)}>
-            {placeIcon(r)}
-            <span className="sb-label">{r.label}</span>
-          </div>
-        ))}
-        <div className="sb-item" onClick={() => setShowRecent((v) => !v)}>
-          <Clock size={14} />
-          <span className="sb-label">Recent</span>
-          {showRecent ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-        </div>
-        {showRecent &&
-          recent.slice(0, 15).map((r) => (
-            <div key={r} className="sb-item sb-indent" title={r} onClick={() => void A.navigate(pane, r)}>
-              <span className="sb-label">{r}</span>
+      <div className="sb-section" data-testid="places-section">
+        <SectionTitle id="places" title="Places" />
+        {!closed.includes('places') && (
+          <>
+            {places.map((r) => (
+              <div key={r.path} className={`sb-item${samePath(r.path, currentPath) ? ' current' : ''}`} title={r.path} onClick={() => void A.navigate(pane, r.path)}>
+                {placeIcon(r)}
+                <span className="sb-label">{r.label}</span>
+              </div>
+            ))}
+            <div className="sb-item" onClick={() => setShowRecent((v) => !v)}>
+              <Clock size={14} />
+              <span className="sb-label">Recent</span>
+              {showRecent ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </div>
-          ))}
+            {showRecent &&
+              recent.slice(0, 15).map((r) => (
+                <div key={r} className="sb-item sb-indent" title={r} onClick={() => void A.navigate(pane, r)}>
+                  <span className="sb-label">{r}</span>
+                </div>
+              ))}
+          </>
+        )}
+      </div>
+      <div className={`sb-section${closed.includes('folders') ? '' : ' sb-tree-section'}`} data-testid="folders-section">
+        <SectionTitle id="folders" title="Folders" />
+        {!closed.includes('folders') && <FolderTree roots={treeRoots} currentPath={currentPath} />}
       </div>
       <LabelsSection />
-      <div className="sb-section sb-tree-section">
-        <div className="sb-title">Folders</div>
-        <FolderTree roots={treeRoots} currentPath={currentPath} />
-      </div>
+    </div>
+  )
+}
+
+/** Title of a sidebar section: click it to close or open the section (remembered between sessions). */
+function SectionTitle({ id, title, onMenu, children }: { id: string; title: string; onMenu?: (e: React.MouseEvent) => void; children?: React.ReactNode }) {
+  const open = !useStore((s) => s.prefs.sidebarCollapsed.includes(id))
+  return (
+    <div
+      className="sb-title sb-toggle"
+      role="button"
+      aria-expanded={open}
+      data-testid={`sb-title-${id}`}
+      title={open ? `Hide ${title}` : `Show ${title}`}
+      onClick={() => A.toggleSidebarSection(id)}
+      onContextMenu={onMenu}
+    >
+      {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      <span className="sb-title-text">{title}</span>
+      {children}
     </div>
   )
 }
@@ -119,6 +144,8 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
   const favorites = useStore((s) => s.favorites)
   const collapsed = useStore((s) => s.prefs.favoritesCollapsed)
   const extraGroups = useStore((s) => s.prefs.favoriteGroups)
+  const groupColors = useStore((s) => s.favoriteGroupColors)
+  const sectionClosed = useStore((s) => s.prefs.sidebarCollapsed.includes('favorites'))
   const groups = useMemo(() => {
     const map = new Map<string, Favorite[]>()
     for (const f of favorites) {
@@ -132,22 +159,38 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
   }, [favorites, extraGroups])
   return (
     <div className="sb-section" data-testid="favorites-section">
-      <div className="sb-title" onContextMenu={(e) => openMenu(e, [{ icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites', testId: 'favorites-edit', action: () => void A.editFavorites() }], 'favorites-title-menu')}>
-        Favorites
-      </div>
-      {favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder; or drag files and folders onto the favorites bar</div>}
-      {(groups.get('') ?? []).map((f, i) => (
-        <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} />
-      ))}
-      {[...groups.entries()]
+      <SectionTitle
+        id="favorites"
+        title="Favorites"
+        onMenu={(e) => openMenu(e, [{ icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites', testId: 'favorites-edit', action: () => void A.editFavorites() }], 'favorites-title-menu')}
+      />
+      {!sectionClosed && favorites.length === 0 && <div className="sb-empty">{keyFor('Favorites ADD') || 'The star button'} adds the current folder; or drag files and folders onto the favorites bar</div>}
+      {!sectionClosed &&
+        (groups.get('') ?? []).map((f, i) => <FavoriteRow key={`${f.path}-${i}`} fav={f} pane={pane} currentPath={currentPath} indent={false} />)}
+      {!sectionClosed &&
+        [...groups.entries()]
         .filter(([g]) => g)
         .map(([g, list]) => {
           const closed = collapsed.includes(g)
           return (
             <div key={g} data-testid="favorite-group">
-              <div className="sb-item sb-group" title={g} onClick={() => A.toggleFavoriteGroup(g)}>
+              <div
+                className="sb-item sb-group"
+                title={g}
+                onClick={() => A.toggleFavoriteGroup(g)}
+                onContextMenu={(e) =>
+                  openMenu(
+                    e,
+                    [
+                      { icon: Palette, label: 'Folder color', desc: 'Color of this folder on the bar, in the sidebar and in Edit favorites', testId: 'sb-group-color', submenu: groupColorSubmenu(groupColors[g], (c) => A.setFavoriteGroupColor(g, c)) },
+                      { icon: Settings2, label: 'Edit favorites…', desc: 'Rename, reorder, group and remove favorites', testId: 'favorites-edit', action: () => void A.editFavorites() }
+                    ],
+                    'sb-group-menu'
+                  )
+                }
+              >
                 {closed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                <Folder size={13} />
+                <Folder size={13} style={groupColors[g] ? { color: groupColors[g] } : undefined} data-testid="sb-group-icon" />
                 <span className="sb-label">{g}</span>
                 <span className="sb-count">{list.length}</span>
               </div>
@@ -159,35 +202,76 @@ function FavoritesSection({ pane, currentPath }: { pane: 0 | 1; currentPath: str
   )
 }
 
+/** Menu of a label in the sidebar: rename, colour, delete, new label. */
+function labelMenu(id: string, current: string): MenuEntry[] {
+  return [
+    { icon: PencilLine, label: 'Rename…', desc: 'The name of this label everywhere in Opal', testId: 'label-rename', action: () => void A.renameLabelPrompt(id) },
+    {
+      icon: Palette,
+      label: 'Color',
+      desc: 'The color of this label in lists and in the sidebar',
+      testId: 'label-color',
+      submenu: FOLDER_COLORS.map((c) => ({ color: c.color, label: c.name, checked: current === c.color, testId: `label-color-${c.name.toLowerCase()}`, action: () => A.setLabelColor(id, c.color) }))
+    },
+    { icon: Trash2, label: 'Delete label', desc: 'Remove this label and take it off the items that have it', danger: true, testId: 'label-delete', action: () => void A.deleteLabel(id) },
+    'sep',
+    { icon: Plus, label: 'New label…', desc: 'Add a label to tag files and folders with', testId: 'label-new', action: () => void A.createLabelPrompt() }
+  ]
+}
+
+/** Labels, under the folders: every label (right-click to rename, recolor or delete it; + adds one). */
 function LabelsSection() {
   const labels = useStore((s) => s.labels)
   const defs = useStore((s) => s.labelDefs)
+  const closed = useStore((s) => s.prefs.sidebarCollapsed.includes('labels'))
   const counts = new Map<string, number>()
   for (const ids of Object.values(labels)) for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1)
-  const used = defs.filter((d) => counts.get(d.id))
   return (
-    <div className="sb-section" data-testid="labels-section">
-      <div className="sb-title">Labels</div>
-      {used.length === 0 && <div className="sb-empty">Right-click → Label, or drop files here</div>}
-      {(used.length ? used : defs.slice(0, 4)).map((d) => (
-        <div
-          key={d.id}
-          className="sb-item"
-          data-help-title={`${d.name} label`}
-          data-help-desc="Click to list every item with this label. Drop files here to add the label."
-          onClick={() => void openDialog('tagged', { label: d.id })}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault()
-            const paths = readDragPaths(e.dataTransfer)
-            if (paths.length) A.toggleLabel(paths, d.id)
+    <div className="sb-section sb-labels-section" data-testid="labels-section">
+      <SectionTitle
+        id="labels"
+        title="Labels"
+        onMenu={(e) => openMenu(e, [{ icon: Plus, label: 'New label…', desc: 'Add a label to tag files and folders with', testId: 'label-new', action: () => void A.createLabelPrompt() }], 'labels-title-menu')}
+      >
+        <button
+          className="sb-title-add"
+          data-testid="label-add"
+          title="New label"
+          aria-label="New label"
+          onClick={(e) => {
+            e.stopPropagation()
+            void A.createLabelPrompt()
           }}
         >
-          <span className="cm-color" style={{ background: d.color }} />
-          <span className="sb-label">{d.name}</span>
-          {counts.get(d.id) ? <span className="sb-count">{counts.get(d.id)}</span> : null}
+          <Plus size={12} />
+        </button>
+      </SectionTitle>
+      {!closed && (
+        <div className="sb-labels">
+          {defs.map((d) => (
+            <div
+              key={d.id}
+              className="sb-item"
+              data-testid="sb-label"
+              data-label={d.id}
+              data-help-title={`${d.name} label`}
+              data-help-desc="Click to list every item with this label. Drop files here to add the label. Right-click to rename, recolor or delete it."
+              onClick={() => void openDialog('tagged', { label: d.id })}
+              onContextMenu={(e) => openMenu(e, labelMenu(d.id, d.color), 'label-menu')}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault()
+                const paths = readDragPaths(e.dataTransfer)
+                if (paths.length) A.toggleLabel(paths, d.id)
+              }}
+            >
+              <span className="cm-color" style={{ background: d.color }} />
+              <span className="sb-label">{d.name}</span>
+              {counts.get(d.id) ? <span className="sb-count">{counts.get(d.id)}</span> : null}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   )
 }

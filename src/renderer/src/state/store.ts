@@ -115,6 +115,8 @@ export interface AppState {
   labelDefs: LabelDef[]
   /** Custom folder icon / row colours, by path. */
   folderStyles: Readonly<Record<string, FolderStyle>>
+  /** Colour of each favorites group's folder icon, by group name. */
+  favoriteGroupColors: Readonly<Record<string, string>>
   /** Lazily loaded column metadata (image dimensions, folder item counts). */
   meta: Readonly<Record<string, ItemMeta>>
   /** Remembered view/sort/grouping per folder. */
@@ -161,6 +163,7 @@ const initial: AppState = {
   labels: {},
   labelDefs: DEFAULT_LABELS,
   folderStyles: {},
+  favoriteGroupColors: {},
   meta: {},
   folderFormats: {},
   quickLook: false,

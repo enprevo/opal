@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bookmark, Folder, FolderInput, FolderOpen, FolderPlus, PencilLine, Plus, Search, Trash2, X, Keyboard } from 'lucide-react'
+import { Bookmark, ChevronRight, Folder, FolderInput, FolderOpen, FolderPlus, Palette, PencilLine, Plus, Search, Trash2, X, Keyboard } from 'lucide-react'
 import { closeDialog, getState, setState, useStore } from '../state/store'
 import * as A from '../state/actions'
 import type { Favorite } from '@shared/types'
@@ -8,7 +8,7 @@ import { isFavoriteShortcut } from '@shared/settings'
 import { basename } from '@shared/paths'
 import { Modal, ShortcutField } from './Dialogs'
 import { FileIcon } from './FileIcon'
-import { openMenu, type MenuEntry } from './ContextMenu'
+import { groupColorSubmenu, openMenu, type MenuEntry } from './ContextMenu'
 import { readDragPaths } from './FileDisplay'
 
 /*
@@ -26,6 +26,8 @@ interface Group {
   key: string
   name: string
   items: Item[]
+  /** Colour of the folder's icon ("#rrggbb"); the default colour when absent. */
+  color?: string
 }
 type Entry = ({ kind: 'item' } & Item) | ({ kind: 'group' } & Group)
 
@@ -49,6 +51,7 @@ function load(): Entry[] {
       kind: 'group',
       key: newKey('g'),
       name: slot.name,
+      color: s.favoriteGroupColors[slot.name],
       items: slot.items.map(({ fav }) => {
         const { group: _g, ...rest } = fav
         return { key: newKey('i'), fav: rest }
@@ -75,6 +78,16 @@ export function FavoritesEditor() {
   const [notice, setNotice] = useState('')
   const [dropRow, setDropRow] = useState<{ key: string; edge: 'before' | 'after' | 'into' } | null>(null)
   const [dropFolder, setDropFolder] = useState<FolderKey | null>(null)
+  /** Folders closed by the person; every folder starts open, so its content shows under it. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set())
+  const isOpen = (key: string): boolean => !collapsed.has(key)
+  const toggleOpen = (key: string): void =>
+    setCollapsed((cur) => {
+      const next = new Set(cur)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   const dragging = useRef<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const hotkeys = useStore((s) => s.hotkeys)
@@ -186,6 +199,17 @@ export function FavoritesEditor() {
     return true
   }
 
+  const setGroupColor = (key: string, color: string | null): void =>
+    setRoot((cur) =>
+      cur.map((e) => {
+        if (e.kind !== 'group' || e.key !== key) return e
+        const { color: _old, ...rest } = e
+        return color ? { ...rest, color } : rest
+      })
+    )
+  /** Inline style giving a group's folder icon its colour. */
+  const tint = (color?: string): React.CSSProperties | undefined => (color ? { color } : undefined)
+
   const newFolder = (): void => {
     let n = 1
     while (groups.some((g) => g.name === (n === 1 ? 'New folder' : `New folder ${n}`))) n++
@@ -238,14 +262,16 @@ export function FavoritesEditor() {
   const save = (): void => {
     const favorites: Favorite[] = []
     const names: string[] = []
+    const colors: Record<string, string> = {}
     for (const e of root) {
       if (e.kind === 'item') favorites.push({ ...e.fav })
       else {
         names.push(e.name)
+        if (e.color) colors[e.name] = e.color
         for (const it of e.items) favorites.push({ ...it.fav, group: e.name })
       }
     }
-    A.saveFavoritesEdit(favorites, names)
+    A.saveFavoritesEdit(favorites, names, colors)
     closeDialog(true)
   }
 
@@ -254,14 +280,18 @@ export function FavoritesEditor() {
   // ---------------------------------------------------------------------------------------------------------------
 
   const q = query.trim().toLowerCase()
-  type Shown = { entry: Entry; folder: FolderKey }
+  /** A row on the right; `child` rows are the content of a folder shown open under it. */
+  type Shown = { entry: Entry; folder: FolderKey; child?: boolean }
   const shown: Shown[] = q
     ? allItems()
         .filter(({ item }) => nameOf(item.fav).toLowerCase().includes(q) || item.fav.path.toLowerCase().includes(q))
         .map(({ item, folder: f }) => ({ entry: { kind: 'item', ...item }, folder: f }))
     : group
       ? group.items.map((it) => ({ entry: { kind: 'item', ...it } as Entry, folder: group.key }))
-      : root.map((entry) => ({ entry, folder: 'bar' as FolderKey }))
+      : root.flatMap((entry): Shown[] => [
+          { entry, folder: 'bar' },
+          ...(entry.kind === 'group' && isOpen(entry.key) ? entry.items.map((it): Shown => ({ entry: { kind: 'item', ...it }, folder: entry.key, child: true })) : [])
+        ])
 
   const folderName = (f: FolderKey): string => (f === 'bar' ? 'Favorites bar' : (groups.find((g) => g.key === f)?.name ?? ''))
 
@@ -298,6 +328,7 @@ export function FavoritesEditor() {
         ? [
             { icon: FolderOpen, label: 'Open', action: () => setFolder(entry.key) },
             { icon: PencilLine, label: 'Rename', hint: 'F2', testId: 'fe-menu-rename', action: () => setEditing(entry.key) },
+            { icon: Palette, label: 'Color', desc: 'Color of this folder on the bar, in the sidebar and here', testId: 'fe-menu-color', submenu: groupColorSubmenu(entry.color, (c) => setGroupColor(entry.key, c)) },
             'sep',
             { icon: Trash2, label: 'Remove folder', desc: 'Its favorites go back on the bar', danger: true, testId: 'fe-menu-remove', action: () => removeKey(entry.key) }
           ]
@@ -319,21 +350,27 @@ export function FavoritesEditor() {
     else if (e.key === 'ArrowDown' && idx < shown.length - 1) setSelected(shown[idx + 1].entry.key)
     else if (e.key === 'ArrowUp' && idx > 0) setSelected(shown[idx - 1].entry.key)
     else if (e.key === 'Enter' && shown[idx]?.entry.kind === 'group') setFolder(selected)
+    else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && shown[idx]?.entry.kind === 'group' && !group && !q && isOpen(selected) !== (e.key === 'ArrowRight')) toggleOpen(selected)
+    else if (e.key === 'ArrowLeft' && shown[idx]?.child) setSelected(shown[idx].folder)
     else return
     e.preventDefault()
     e.stopPropagation()
   }
 
-  const renderRow = ({ entry, folder: f }: Shown) => {
+  const renderRow = ({ entry, folder: f, child }: Shown) => {
     const isGroup = entry.kind === 'group'
     const mark = dropRow?.key === entry.key ? ` drop-${dropRow.edge}` : ''
     const name = isGroup ? entry.name : nameOf(entry.fav)
+    // Folders can be opened in place only on the bar's list (inside a folder there are no folders).
+    const canOpen = isGroup && !group && !q
+    const open = canOpen && isOpen(entry.key)
     return (
       <div
         key={entry.key}
-        className={`fe-row${selected === entry.key ? ' selected' : ''}${isGroup ? ' group' : ''}${mark}`}
+        className={`fe-row${selected === entry.key ? ' selected' : ''}${isGroup ? ' group' : ''}${child ? ' child' : ''}${open ? ' open' : ''}${mark}`}
         data-testid="fe-row"
         data-key={entry.key}
+        data-child={child ? '' : undefined}
         data-path={isGroup ? undefined : entry.fav.path}
         data-group={isGroup ? entry.name : undefined}
         draggable={editing !== entry.key && !q}
@@ -352,23 +389,42 @@ export function FavoritesEditor() {
         }}
         onDragOver={(e) => {
           if (!accepts(e) || q) return
+          const draggingGroup = !!dragging.current && groups.some((g) => g.key === dragging.current)
+          // Folders only sit on the bar: they cannot go between the rows of another folder.
+          if (draggingGroup && child) return
           e.preventDefault()
           e.stopPropagation()
           const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
           const y = (e.clientY - r.top) / r.height
-          const draggingGroup = !!dragging.current && groups.some((g) => g.key === dragging.current)
           const edge = isGroup && !draggingGroup && dragging.current !== entry.key && y > 0.25 && y < 0.75 ? 'into' : y < 0.5 ? 'before' : 'after'
           if (dropRow?.key !== entry.key || dropRow.edge !== edge) setDropRow({ key: entry.key, edge })
         }}
         onDrop={(e) => {
           const edge = dropRow?.key === entry.key ? dropRow.edge : 'after'
           if (edge === 'into') return dropAt(e, { folder: entry.key, before: null })
-          const list = shown.map((s) => s.entry.key)
+          // The next row of the same folder (an open folder's content is not part of the bar's order).
+          const list = shown.filter((s) => s.folder === f).map((s) => s.entry.key)
           const i = list.indexOf(entry.key)
           dropAt(e, { folder: f, before: edge === 'before' ? entry.key : (list[i + 1] ?? null) })
         }}
       >
-        <span className="fe-icon">{isGroup ? <Folder size={17} className="fb-group-icon" /> : <FileIcon path={entry.fav.path} isDir={!entry.fav.file} size={17} />}</span>
+        {canOpen ? (
+          <button
+            className="fe-twisty"
+            data-testid="fe-twisty"
+            title={open ? 'Hide what is inside' : 'Show what is inside'}
+            aria-label={open ? 'Close folder' : 'Open folder'}
+            aria-expanded={open}
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onClick={() => toggleOpen(entry.key)}
+          >
+            <ChevronRight size={14} />
+          </button>
+        ) : (
+          <span className="fe-twisty-space" />
+        )}
+        <span className="fe-icon">{isGroup ? open ? <FolderOpen size={17} className="fb-group-icon" style={tint(entry.color)} /> : <Folder size={17} className="fb-group-icon" style={tint(entry.color)} /> : <FileIcon path={entry.fav.path} isDir={!entry.fav.file} size={17} />}</span>
         <div className="fe-main">
           {editing === entry.key ? (
             <RenameInput
@@ -438,6 +494,22 @@ export function FavoritesEditor() {
       onDragLeave={() => dropFolder === key && setDropFolder(null)}
       onDrop={(e) => dropAt(e, { folder: key, before: null })}
     >
+      {key !== 'bar' ? (
+        <button
+          className="fe-twisty"
+          data-testid="fe-tree-twisty"
+          title={isOpen(key) ? 'Hide what is inside' : 'Show what is inside'}
+          aria-label={isOpen(key) ? 'Close folder' : 'Open folder'}
+          aria-expanded={isOpen(key)}
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleOpen(key)
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
+          <ChevronRight size={13} />
+        </button>
+      ) : null}
       {icon}
       {treeEditing === key && key !== 'bar' ? (
         <RenameInput
@@ -498,7 +570,41 @@ export function FavoritesEditor() {
         <div className="fe-panes">
           <div className="fe-tree" data-testid="fe-tree">
             {treeFolder('bar', 'Favorites bar', barCount, <Bookmark size={16} className="fe-bar-icon" />)}
-            {groups.map((g) => treeFolder(g.key, g.name, g.items.length, <Folder size={16} className="fb-group-icon" />))}
+            {groups.map((g) => (
+              <div key={g.key} className="fe-tree-group">
+                {treeFolder(g.key, g.name, g.items.length, isOpen(g.key) ? <FolderOpen size={16} className="fb-group-icon" style={tint(g.color)} /> : <Folder size={16} className="fb-group-icon" style={tint(g.color)} />)}
+                {isOpen(g.key) &&
+                  g.items.map((it) => (
+                    <div
+                      key={it.key}
+                      className={`fe-tree-leaf${selected === it.key && !q && folder === g.key ? ' current' : ''}`}
+                      data-testid="fe-tree-item"
+                      data-path={it.fav.path}
+                      title={it.fav.path}
+                      draggable
+                      onClick={() => {
+                        setQuery('')
+                        setFolder(g.key)
+                        setSelected(it.key)
+                      }}
+                      onContextMenu={(e) => rowMenu(e, { kind: 'item', ...it }, g.key)}
+                      onDragStart={(e) => {
+                        dragging.current = it.key
+                        e.dataTransfer.setData(DRAG_TYPE, it.key)
+                        e.dataTransfer.effectAllowed = 'move'
+                      }}
+                      onDragEnd={() => {
+                        dragging.current = null
+                        setDropRow(null)
+                        setDropFolder(null)
+                      }}
+                    >
+                      <FileIcon path={it.fav.path} isDir={!it.fav.file} size={15} />
+                      <span className="fe-tree-label">{nameOf(it.fav)}</span>
+                    </div>
+                  ))}
+              </div>
+            ))}
           </div>
           <div
             ref={listRef}
@@ -533,7 +639,18 @@ export function FavoritesEditor() {
                 {q ? 'Nothing matches' : 'This folder is empty. Drag favorites here, or files and folders from your desktop.'}
               </div>
             )}
-            {shown.map(renderRow)}
+            {shown.map((s) =>
+              s.entry.kind === 'group' && !group && !q && isOpen(s.entry.key) && s.entry.items.length === 0 ? (
+                <div key={s.entry.key} className="fe-group-block">
+                  {renderRow(s)}
+                  <div className="fe-row-empty" data-testid="fe-row-empty">
+                    Empty — drag favorites onto this folder
+                  </div>
+                </div>
+              ) : (
+                renderRow(s)
+              )
+            )}
           </div>
         </div>
         {notice && (
