@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { SettingsStore } from '../../src/main/settings'
-import { fromImport, isFavoriteShortcut, normalizeFavorites, normalizeFolderStyles, normalizeGroupColors, normalizeState, toExport } from '../../src/shared/settings'
+import { fromImport, isFavoriteShortcut, normalizeFavorites, normalizeFolderStyles, normalizeGroupColors, normalizeState, normalizeWindow, toExport } from '../../src/shared/settings'
 import { DEFAULT_PREFS } from '../../src/shared/types'
 import { effectiveHotkeys, hotkeyOverrides } from '../../src/renderer/src/state/commands'
 
@@ -32,6 +32,13 @@ describe('settings normalisation', () => {
     const st = normalizeState({ ui: { sidebarWidth: 9999, paneRatio: 0.01, columnWidths: { name: 300, size: -5 } } })
     expect(st.ui).toEqual({ sidebarWidth: 600, paneRatio: 0.15, columnWidths: { name: 300 } })
   })
+  it('remembers the window size, place and whether it was maximized or full screen', () => {
+    expect(normalizeState({ window: { width: 1200.4, height: 700, x: 10, y: 20, maximized: true } }).window).toEqual({ width: 1200, height: 700, x: 10, y: 20, maximized: true })
+    expect(normalizeWindow({ width: 100, height: 100, fullScreen: true, maximized: 'yes' })).toEqual({ width: 800, height: 500, fullScreen: true })
+    expect(normalizeWindow({ width: 1000, height: 600, x: 5 })).toEqual({ width: 1000, height: 600 })
+    expect(normalizeWindow({ height: 600 })).toBeUndefined()
+    expect(normalizeState({}).window).toBeUndefined()
+  })
 })
 
 describe('export and import', () => {
@@ -43,6 +50,7 @@ describe('export and import', () => {
     labels: { 'C:\\Work\\a.txt': ['red'] },
     session: { panes: [], activePane: 0 },
     ui: { sidebarWidth: 300 },
+    window: { width: 1000, height: 700, maximized: true },
     renamePresets: { Dates: { newPattern: '{date}-*' } }
   })
   it('exports everything except open tabs and recent folders', () => {
@@ -51,6 +59,7 @@ describe('export and import', () => {
     expect(out.platform).toBe('win32')
     expect('session' in out).toBe(false)
     expect('recent' in out).toBe(false)
+    expect('window' in out).toBe(false)
     expect(out.favorites[0].label).toBe('Work')
     expect(out.renamePresets?.Dates).toBeTruthy()
   })
@@ -62,6 +71,9 @@ describe('export and import', () => {
     expect(merged.ui?.sidebarWidth).toBe(300)
     expect(merged.recent).toEqual(['/home/me/x'])
     expect(merged.session?.panes.length).toBe(1)
+    expect(merged.window).toBeUndefined()
+    const fullHere = normalizeState({ window: { width: 900, height: 600, fullScreen: true } })
+    expect(fromImport({ ...toExport(base, '1', 'win32'), window: { width: 2000, height: 1000 } }, fullHere).window).toEqual({ width: 900, height: 600, fullScreen: true })
   })
   it('rejects files that are not Opal settings', () => {
     expect(() => fromImport({ hello: 1 }, base)).toThrow(/not an Opal settings file/)

@@ -127,9 +127,25 @@ Windows file brings your own keys to a Mac without overriding macOS conventions.
 on the computer they belong to. Opal keeps the previous version as `opal-settings.bak.json` and never replaces an
 unreadable file with defaults: it is set aside as `opal-settings.corrupt-<time>.json`.
 
+## Install from source in one step
+
+Clone the repository, then in its folder:
+
+| System | Run |
+| --- | --- |
+| **Windows** | double-click `install.cmd` |
+| **macOS / Linux** | `./install.sh` |
+
+It builds Opal for your computer and installs it, then starts it: on Windows for your user (Start menu and desktop
+shortcut), on macOS in Applications, on Linux with the `.deb` (Debian, Ubuntu, Mint…), the `.rpm` (Fedora, openSUSE,
+when `rpmbuild` is installed) or otherwise as an AppImage in `~/.local/bin` with a menu entry. If Node.js 22.12 or
+newer is missing it offers to install it (winget on Windows, [nvm](https://github.com/nvm-sh/nvm) in your home folder
+on macOS and Linux). Run it again after `git pull` to update. Options: `--no-open` (don't start Opal at the end),
+`--appimage` (Linux: the AppImage).
+
 ## Build from source
 
-Requirements: [Node.js](https://nodejs.org/) 22 or newer.
+Requirements: [Node.js](https://nodejs.org/) 22.12 or newer.
 
 ```bash
 npm install

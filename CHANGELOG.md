@@ -28,6 +28,17 @@ All notable changes to this project are documented here. The format follows
   the items that have it, after asking); the + beside the Labels title adds a new one. The sidebar now lists every
   label.
 - Sidebar sections (Favorites, Places, Folders, Labels) open and close from their title, and stay so between sessions.
+- The window opens as it was left: its size and place, and whether it was maximized or full screen (leaving full
+  screen brings it back maximized if it was). A place on a screen that is no longer connected is not used. This stays
+  on each computer: it is not part of exported settings.
+- One-step install from a clone: double-click `install.cmd` on Windows, run `./install.sh` on macOS and Linux. It
+  installs the dependencies, builds and packages Opal for the computer, installs it (Windows: for the user; macOS:
+  Applications; Linux: .deb, .rpm or AppImage with a menu entry) and starts it; when Node.js is missing it offers to
+  install it.
+
+### Fixed
+
+- Settings changed just before quitting (menu, Ctrl+Q, logging out) are saved: quitting waits until they are written.
 
 ### Changed
 

@@ -3,7 +3,7 @@
  * a file exported on another computer (possibly another OS or an older version): unknown keys are dropped,
  * values of the wrong type fall back to defaults, and older shapes are migrated.
  */
-import { DEFAULT_PREFS, type Favorite, type FolderStyle, type LabelDef, type PersistedState, type Prefs, type UiState } from './types'
+import { DEFAULT_PREFS, type Favorite, type FolderStyle, type LabelDef, type PersistedState, type Prefs, type UiState, type WindowState } from './types'
 
 export const SETTINGS_FORMAT = 'opal-settings'
 
@@ -149,6 +149,26 @@ function normalizeUi(raw: unknown): UiState | undefined {
   return ui
 }
 
+/** The remembered window: a sensible size (at least the window's minimum), an optional place, maximized / full screen. */
+export function normalizeWindow(raw: unknown): WindowState | undefined {
+  if (!isObj(raw)) return undefined
+  const int = (v: unknown, min: number, max: number): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.round(Math.min(max, Math.max(min, v))) : undefined
+  const width = int(raw.width, 800, 20000)
+  const height = int(raw.height, 500, 20000)
+  if (width === undefined || height === undefined) return undefined
+  const win: WindowState = { width, height }
+  const x = int(raw.x, -20000, 20000)
+  const y = int(raw.y, -20000, 20000)
+  if (x !== undefined && y !== undefined) {
+    win.x = x
+    win.y = y
+  }
+  if (raw.maximized === true) win.maximized = true
+  if (raw.fullScreen === true) win.fullScreen = true
+  return win
+}
+
 export function normalizeState(raw: unknown): PersistedState {
   const r = isObj(raw) ? raw : {}
   const state: PersistedState = {
@@ -176,6 +196,8 @@ export function normalizeState(raw: unknown): PersistedState {
   if (Array.isArray(r.toolbar)) state.toolbar = r.toolbar.filter((b) => isObj(b) && typeof b.label === 'string' && typeof b.command === 'string') as PersistedState['toolbar']
   const ui = normalizeUi(r.ui)
   if (ui) state.ui = ui
+  const win = normalizeWindow(r.window)
+  if (win) state.window = win
   if (isObj(r.renamePresets)) {
     const presets: Record<string, Record<string, unknown>> = {}
     for (const [name, opts] of Object.entries(r.renamePresets)) if (isObj(opts)) presets[name] = opts
@@ -184,26 +206,29 @@ export function normalizeState(raw: unknown): PersistedState {
   return state
 }
 
-export interface SettingsExport extends Omit<PersistedState, 'session' | 'recent'> {
+export interface SettingsExport extends Omit<PersistedState, 'session' | 'recent' | 'window'> {
   format: typeof SETTINGS_FORMAT
   version: string
   exportedAt: string
   platform: string
 }
 
-/** What goes into an exported file: everything except machine-specific state (open tabs, recent folders). */
+/** What goes into an exported file: everything except machine-specific state (open tabs, recent folders, window). */
 export function toExport(state: PersistedState, version: string, platform: string): SettingsExport {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { session, recent, ...rest } = state
+  const { session, recent, window, ...rest } = state
   return { format: SETTINGS_FORMAT, version, exportedAt: new Date().toISOString(), platform, ...rest }
 }
 
 /**
  * Reads an exported file (or a raw settings file) and merges it over the current state. Open tabs and recent
- * folders of this computer are kept.
+ * folders and the window of this computer are kept.
  */
 export function fromImport(raw: unknown, current: PersistedState): PersistedState {
   if (!isObj(raw) || (raw.format !== SETTINGS_FORMAT && !isObj(raw.prefs))) throw new Error('This is not an Opal settings file')
   const imported = normalizeState(raw)
-  return { ...imported, session: current.session, recent: current.recent }
+  const merged: PersistedState = { ...imported, session: current.session, recent: current.recent }
+  if (current.window) merged.window = current.window
+  else delete merged.window
+  return merged
 }

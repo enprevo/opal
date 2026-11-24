@@ -2,3 +2,6 @@
 *.png binary
 *.ico binary
 *.icns binary
+# Windows runs batch files reliably only with CRLF line endings.
+*.cmd text eol=crlf
+*.bat text eol=crlf

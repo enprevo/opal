@@ -262,6 +262,16 @@ export interface UiState {
   columnWidths?: Record<string, number>
 }
 
+/** The main window as it was last left: size and place when not maximized, and whether it was maximized or full screen. */
+export interface WindowState {
+  width: number
+  height: number
+  x?: number
+  y?: number
+  maximized?: boolean
+  fullScreen?: boolean
+}
+
 export interface SessionTab {
   path: string
   viewMode: ViewMode
@@ -289,6 +299,8 @@ export interface PersistedState {
   hotkeys?: Record<string, string>
   toolbar?: ToolbarButton[]
   ui?: UiState
+  /** Size, place and maximized / full-screen state of the window on this computer. */
+  window?: WindowState
   /** Saved Advanced Rename presets, by name. */
   renamePresets?: Record<string, Record<string, unknown>>
 }
