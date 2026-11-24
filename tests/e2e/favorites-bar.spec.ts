@@ -107,7 +107,7 @@ test('favorites bar: drag folders and files in, open them, group them in a folde
   await expect(p.getByTestId('favorite-item')).toHaveCount(3)
 })
 
-test('edit favorites: right-click the bar, rename, regroup, reorder, set a shortcut, remove', async () => {
+test('edit favorites like a bookmark manager: folders on the left, drag between them, rename in place', async () => {
   h = await launch(async (left) => {
     await write(path.join(left, 'docs', 'a.txt'), 'a')
     await write(path.join(left, 'music', 'b.txt'), 'b')
@@ -125,6 +125,7 @@ test('edit favorites: right-click the bar, rename, regroup, reorder, set a short
   const bar = p.getByTestId('favorites-bar')
   const docs = path.join(h.left, 'docs')
   const music = path.join(h.left, 'music')
+  const note = path.join(h.left, 'note.txt')
   await expect(bar.getByTestId('favbar-item')).toHaveText(['docs', 'music', 'note.txt'])
 
   // Right-click on an item (or on the bar) offers "Edit favorites".
@@ -132,45 +133,73 @@ test('edit favorites: right-click the bar, rename, regroup, reorder, set a short
   await p.getByTestId('favorites-edit').click()
   const ed = p.getByTestId('favorites-editor')
   await expect(ed).toBeVisible()
-  const rows = ed.getByTestId('fe-row')
-  await expect(rows).toHaveCount(3)
+  const list = ed.getByTestId('fe-list')
+  const row = (sel: string) => list.locator(`[data-testid="fe-row"]${sel}`)
+  const tree = ed.getByTestId('fe-tree-folder')
+  await expect(list.getByTestId('fe-row')).toHaveCount(3)
 
-  // Rename docs, move music up, remove the file.
-  await rows.nth(0).getByTestId('fe-name').fill('Documents')
-  await rows.nth(1).getByTestId('fe-up').click()
-  await ed.locator('[data-testid="fe-row"][data-path$="note.txt"]').getByTestId('fe-remove').click()
-  await expect(rows).toHaveCount(2)
+  // New folder: named in place.
+  await ed.getByTestId('fe-new-folder').click()
+  await ed.getByTestId('fe-name-input').fill('Work')
+  await ed.getByTestId('fe-name-input').press('Enter')
+  await expect(tree).toHaveText([/Favorites bar/, /Work/])
 
-  // A new group, with docs in it.
-  await ed.getByTestId('fe-add-group').click()
-  await ed.getByTestId('fe-group-name').fill('Work')
-  await ed.locator(`[data-testid="fe-row"][data-path="${docs}"]`).getByTestId('fe-group').selectOption({ label: 'Work' })
+  // Drag a favorite onto the folder on the left.
+  await row(`[data-path="${docs}"]`).dragTo(tree.nth(1))
+  await expect(row('[data-path]')).toHaveCount(2)
+  await expect(tree.nth(1)).toContainText('1')
 
-  // A shortcut taken by a command is refused until it is changed.
-  const musicRow = ed.locator(`[data-testid="fe-row"][data-path="${music}"]`)
-  await musicRow.getByTestId('shortcut-field').click()
+  // Drag to reorder: note.txt before music.
+  await row(`[data-path="${note}"]`).dragTo(row(`[data-path="${music}"]`), { targetPosition: { x: 40, y: 3 } })
+  await expect.poll(() => row('[data-path]').evaluateAll((els) => els.map((e) => e.getAttribute('data-path')))).toEqual([note, music])
+
+  // Right-click → Move to → Work.
+  await row(`[data-path="${music}"]`).click({ button: 'right' })
+  await p.getByTestId('fe-menu-move').hover()
+  await p.getByTestId('fe-move-group').click()
+  await expect(row('[data-path]')).toHaveCount(1)
+
+  // Open the folder and rename an item in place (double-click).
+  await tree.nth(1).click()
+  await expect(row('[data-path]')).toHaveCount(2)
+  await row(`[data-path="${docs}"]`).dblclick()
+  await ed.getByTestId('fe-name-input').fill('Documents')
+  await ed.getByTestId('fe-name-input').press('Enter')
+  await expect(row(`[data-path="${docs}"]`)).toContainText('Documents')
+
+  // Search across folders.
+  await ed.getByTestId('fe-search').fill('mus')
+  await expect(list.getByTestId('fe-row')).toHaveCount(1)
+  await ed.getByTestId('fe-search').fill('')
+
+  // A shortcut taken by a command is refused with the reason; a free one is kept.
+  await ed.getByTestId('fe-crumb-bar').click()
+  const noteRow = row(`[data-path="${note}"]`)
+  await noteRow.hover()
+  await noteRow.getByTestId('shortcut-field').click()
   await p.keyboard.press('Control+c')
-  await expect(ed.getByTestId('fe-problem')).toBeVisible()
-  await expect(ed.getByTestId('fe-save')).toBeDisabled()
-  await musicRow.getByTestId('shortcut-field').click()
-  await p.keyboard.press('Control+Alt+m')
-  await expect(ed.getByTestId('fe-problem')).toHaveCount(0)
+  await expect(ed.getByTestId('fe-problem')).toContainText('used by the command')
+  await noteRow.getByTestId('shortcut-field').click()
+  await p.keyboard.press('Control+Alt+n')
+  await expect(noteRow.getByTestId('shortcut-field')).toHaveText('Ctrl+Alt+N')
 
   await ed.getByTestId('fe-save').click()
   await expect(ed).toHaveCount(0)
   await expect.poll(async () => (await saved(p)).favorites).toEqual([
-    { path: music, shortcut: 'Ctrl+Alt+M' },
-    { path: docs, label: 'Documents', group: 'Work' }
+    { path: note, file: true, shortcut: 'Ctrl+Alt+N' },
+    { path: docs, label: 'Documents', group: 'Work' },
+    { path: music, group: 'Work' }
   ])
-  await expect(bar.getByTestId('favbar-item')).toHaveText(['music'])
+  await expect(bar.getByTestId('favbar-item')).toHaveText(['note.txt'])
   await bar.getByTestId('favbar-group').click()
-  await expect(p.getByTestId('favbar-dropdown-item')).toHaveText(['Documents'])
+  await expect(p.getByTestId('favbar-dropdown-item')).toHaveText(['Documents', 'music'])
 
   // Cancel leaves everything as it was.
   await p.keyboard.press('Escape')
   await bar.click({ button: 'right', position: { x: (await bar.boundingBox())!.width - 60, y: 10 } })
   await p.getByTestId('favorites-edit').click()
+  await p.getByTestId('favorites-editor').getByTestId('fe-row').first().hover()
   await p.getByTestId('favorites-editor').getByTestId('fe-remove').first().click()
   await p.getByTestId('favorites-editor').getByRole('button', { name: 'Cancel' }).click()
-  await expect(bar.getByTestId('favbar-item')).toHaveText(['music'])
+  await expect(bar.getByTestId('favbar-item')).toHaveText(['note.txt'])
 })

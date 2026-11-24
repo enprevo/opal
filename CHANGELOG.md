@@ -15,8 +15,11 @@ All notable changes to this project are documented here. The format follows
   the same list; file favorites are opened from the sidebar too. Show or hide it in Settings → Appearance, with the
   optional "Fav bar" toolbar button or `Set FAVBAR=toggle`.
 - "Edit favorites…" in the right-click menu of the favorites bar, its items and groups (and of the sidebar
-  Favorites): one window to rename favorites, change their order and group, give them shortcuts, add folders, create,
-  rename or remove groups and remove favorites. Nothing changes until Save.
+  Favorites), laid out like a browser's bookmark manager: the favorites bar and its folders on the left, the content
+  of the chosen folder on the right. Drag rows to reorder them or onto a folder (left or right) to move them, drag
+  folders along the bar, drop files and folders from the desktop, double-click to rename in place (or open a folder),
+  right-click for Rename, Move to, Remove; search across all folders; shortcuts are set on each row and refused with
+  the reason when taken. Nothing changes until Save.
 
 ### Changed
 

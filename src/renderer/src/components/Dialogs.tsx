@@ -542,7 +542,7 @@ function toLocalInput(ms: number): string {
 }
 
 /** Click, then press the key combination that should open the folder. Backspace clears it, Escape cancels. */
-export function ShortcutField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function ShortcutField({ value, onChange, empty = 'None — click to record' }: { value: string; onChange: (v: string) => void; empty?: string }) {
   const [recording, setRecording] = useState(false)
   return (
     <button
@@ -564,7 +564,7 @@ export function ShortcutField({ value, onChange }: { value: string; onChange: (v
         }
       }}
     >
-      {recording ? 'Press keys… (Backspace clears)' : value || 'None — click to record'}
+      {recording ? 'Press keys… (Backspace clears)' : value || empty}
     </button>
   )
 }
