@@ -109,6 +109,7 @@ test('favorite with a shortcut: set from the folder tree, opens the folder from 
 
   // The same shortcut cannot be given to another folder.
   await (await item(p, 0, 'docs')).dblclick()
+  await expect(crumbs.last()).toHaveText('docs') // wait for the folder to open: the menu below is for the last crumb
   await p.getByTestId('breadcrumbs-0').getByTestId('crumb').last().click({ button: 'right' })
   await p.getByTestId('folder-shortcut').click()
   await p.getByTestId('shortcut-field').click()
