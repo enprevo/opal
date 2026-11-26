@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- "Move to new folder…" in the right-click menu of files and folders: creates a folder next to them (named
+  "New Folder", "New Folder 2"… unless you type another name) and moves every selected item into it, then selects
+  the new folder. Also available as `CreateFolder MOVESELECTED [NAME=<name>]`, to bind to a key.
 - Favorites bar under the toolbar. Drag folders and files onto it (from a file list or from the desktop) to add them;
   click a folder to go into it (middle-click: new tab) and a file to open it with its app. Groups show as folders on
   the bar with a drop-down list: drop items on a group to put them in it, or hold the drag there to open it and drop at
@@ -34,7 +37,8 @@ All notable changes to this project are documented here. The format follows
 - One-step install from a clone: double-click `install.cmd` on Windows, run `./install.sh` on macOS and Linux. It
   installs the dependencies, builds and packages Opal for the computer, installs it (Windows: for the user; macOS:
   Applications; Linux: .deb, .rpm or AppImage with a menu entry) and starts it; when Node.js is missing it offers to
-  install it.
+  install it. Afterwards it deletes the packaged app it made and tells how much space it freed (`--keep` keeps it,
+  `--clean-all` also deletes the dependencies and the build).
 
 ### Fixed
 
@@ -45,6 +49,9 @@ All notable changes to this project are documented here. The format follows
 - While the favorites bar is shown, the sidebar no longer repeats the Favorites section; hiding the bar brings it back.
 - More room around the toolbar buttons, the favorites bar and the items of right-click menus.
 - Labels are listed under Folders in the sidebar.
+- Favorites bar: a folder or file dragged onto it lands exactly where it is dropped, also in the space between two
+  favorites (a line shows where); before it only went there when dropped on a favorite, and otherwise at the end. One
+  that is already a favorite moves to the new place (keeping its name and shortcut) instead of staying where it was.
 
 ### Development
 
@@ -68,6 +75,11 @@ All notable changes to this project are documented here. The format follows
   SQL, JSON, YAML, TOML/INI, HTML/XML, CSS/SCSS/Less, Makefile, Dockerfile, CMake, Arduino, diff…) or a `#!` line.
   Fenced code blocks in rendered Markdown are colored too. Colors follow the dark and light themes; plain text and
   very large files are shown as before.
+- Network shares: a folder shows at once even when some of its items are slow to read, such as DFS links to a server
+  the user may not open (Linux tries to connect to it every time, half a second each, one after the other). Those
+  items appear with their name first and their details follow as they are read. An item that can't be read is not
+  asked for again for a minute, and slow items no longer hold up the rest of the app. A share folder with nine such
+  links opened in about 14 seconds and now opens in well under one.
 
 ### Linux
 

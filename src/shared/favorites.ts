@@ -82,8 +82,16 @@ function place(rest: Favorite[], moved: Favorite[], anchor: Favorite | null, gro
 export function moveFavorites(favorites: Favorite[], indices: number[], target: FavoriteTarget): Favorite[] {
   const picked = new Set(indices.filter((i) => i >= 0 && i < favorites.length))
   if (!picked.size) return favorites
-  const anchorCandidate = target.beforeIndex != null ? favorites[target.beforeIndex] : undefined
-  const anchor = anchorCandidate && !picked.has(target.beforeIndex!) ? anchorCandidate : null
+  // Dropped just before one of the moved favorites (e.g. before itself): before the next one that stays.
+  let anchor: Favorite | null = null
+  if (target.beforeIndex != null) {
+    for (let i = target.beforeIndex; i < favorites.length; i++) {
+      if (!picked.has(i)) {
+        anchor = favorites[i]
+        break
+      }
+    }
+  }
   const rest = favorites.filter((_, i) => !picked.has(i))
   const moved: Favorite[] = []
   for (const i of [...picked].sort((a, b) => a - b)) {
@@ -96,22 +104,43 @@ export function moveFavorites(favorites: Favorite[], indices: number[], target: 
   return place(rest, moved, anchor, target.group)
 }
 
-/** Adds new favorites at the target; returns the new list and how many were already there. */
-export function insertFavorites(favorites: Favorite[], added: Favorite[], target: FavoriteTarget): { favorites: Favorite[]; skipped: number } {
-  const anchor = target.beforeIndex != null ? (favorites[target.beforeIndex] ?? null) : null
-  const fresh: Favorite[] = []
-  let skipped = 0
+/**
+ * Puts dropped files and folders at the target. One already listed there (same path, on the bar or in the same group)
+ * is moved to the drop position, with its name and shortcut, instead of being doubled. Returns the new list, how many
+ * were added and how many moved.
+ */
+export function insertFavorites(favorites: Favorite[], added: Favorite[], target: FavoriteTarget): { favorites: Favorite[]; added: number; moved: number } {
+  const items: Favorite[] = []
+  const existing = new Set<Favorite>()
+  let fresh = 0
   for (const a of added) {
     const next: Favorite = { ...a }
     if (target.group) next.group = target.group
     else delete next.group
-    if (favorites.some((f) => sameKey(f, next)) || fresh.some((f) => sameKey(f, next))) {
-      skipped++
+    const listed = favorites.find((f) => sameKey(f, next))
+    if (listed) {
+      if (!existing.has(listed)) {
+        existing.add(listed)
+        items.push(listed)
+      }
       continue
     }
-    fresh.push(next)
+    if (items.some((f) => sameKey(f, next))) continue
+    items.push(next)
+    fresh++
   }
-  return { favorites: fresh.length ? place(favorites, fresh, anchor, target.group) : favorites, skipped }
+  if (!items.length) return { favorites, added: 0, moved: 0 }
+  let anchor = target.beforeIndex != null ? (favorites[target.beforeIndex] ?? null) : null
+  // Dropped just before itself: it stays before the favorite that follows it.
+  if (anchor && existing.has(anchor)) anchor = favorites.slice(favorites.indexOf(anchor) + 1).find((f) => !existing.has(f)) ?? null
+  const out = place(
+    favorites.filter((f) => !existing.has(f)),
+    items,
+    anchor,
+    target.group
+  )
+  const same = out.length === favorites.length && out.every((f, i) => f === favorites[i])
+  return { favorites: same ? favorites : out, added: fresh, moved: same ? 0 : existing.size }
 }
 
 /** Renames a group (its favorites follow). Merges into an existing group of the same name. */

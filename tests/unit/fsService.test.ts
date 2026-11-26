@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { promises as fsp } from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -51,6 +51,85 @@ describe('listing', () => {
     const roots = await fsx.getRoots()
     expect(roots.some((r) => r.kind === 'home')).toBe(true)
     expect(roots.some((r) => r.kind === 'drive' || r.kind === 'root')).toBe(true)
+  })
+})
+
+describe('slow and unreadable entries (network shares)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    fsx.forgetStatFailures()
+  })
+
+  /** Make lstat of `slowPath` take `ms`, then fail with `failCode` (or succeed). */
+  function slowLstat(slowPath: string, ms: number, failCode?: string): { calls: () => number } {
+    const real = fsp.lstat.bind(fsp)
+    let n = 0
+    vi.spyOn(fsp, 'lstat').mockImplementation((async (p: string, ...rest: unknown[]) => {
+      if (p !== slowPath) return (real as (...a: unknown[]) => unknown)(p, ...rest)
+      n++
+      await new Promise((r) => setTimeout(r, ms))
+      if (failCode) throw Object.assign(new Error(`${failCode}: ${p}`), { code: failCode })
+      return (real as (...a: unknown[]) => unknown)(p, ...rest)
+    }) as typeof fsp.lstat)
+    return { calls: () => n }
+  }
+
+  it('returns a folder at once when an entry is slow, and sends that entry once read', async () => {
+    await write('fast.txt', 'abc')
+    await write('slow/inner.txt')
+    const slow = path.join(tmp, 'slow')
+    slowLstat(slow, 800)
+    const late: { dir: string; entries: FileEntry[] }[] = []
+    const t0 = Date.now()
+    const l = await fsx.listDir(tmp, { lateAfterMs: 100, onLate: (dir, entries) => late.push({ dir, entries }) })
+    expect(Date.now() - t0).toBeLessThan(600)
+    expect(l.entries.find((e) => e.name === 'fast.txt')!.size).toBe(3)
+    const placeholder = l.entries.find((e) => e.name === 'slow')!
+    expect(placeholder.isDir).toBe(true)
+    expect(placeholder.mtime).toBe(0)
+    await vi.waitFor(() => expect(late).toHaveLength(1), { timeout: 3000 })
+    expect(late[0].dir).toBe(path.resolve(tmp))
+    expect(late[0].entries.map((e) => e.name)).toEqual(['slow'])
+    expect(late[0].entries[0].mtime).toBeGreaterThan(0)
+  })
+
+  it('waits for every entry when reading keeps making progress or no late handler is given', async () => {
+    for (let i = 0; i < 20; i++) await write(`f${i}.txt`)
+    const late: FileEntry[][] = []
+    const l = await fsx.listDir(tmp, { lateAfterMs: 0, onLate: (_d, e) => late.push(e) })
+    expect(l.entries).toHaveLength(20)
+    expect(l.entries.every((e) => e.mtime > 0)).toBe(true)
+
+    await write('slow.txt')
+    slowLstat(path.join(tmp, 'slow.txt'), 300)
+    const all = await fsx.listDir(tmp)
+    expect(all.entries.find((e) => e.name === 'slow.txt')!.mtime).toBeGreaterThan(0)
+    expect(late).toHaveLength(0)
+  })
+
+  it('does not read an unreadable entry again for a while', async () => {
+    await write('denied/x')
+    const denied = path.join(tmp, 'denied')
+    const spy = slowLstat(denied, 50, 'EACCES')
+    const first = await fsx.listDir(tmp)
+    expect(first.entries.find((e) => e.name === 'denied')!.isDir).toBe(true)
+    expect(spy.calls()).toBe(1)
+    const t0 = Date.now()
+    await fsx.listDir(tmp)
+    await expect(fsx.statEntry(denied)).rejects.toMatchObject({ code: 'EACCES' })
+    expect((await fsx.itemMeta([denied]))[denied]).toEqual({})
+    expect(spy.calls()).toBe(1)
+    expect(Date.now() - t0).toBeLessThan(50)
+    fsx.forgetStatFailures(path.resolve(tmp))
+    await fsx.listDir(tmp)
+    expect(spy.calls()).toBe(2)
+  })
+
+  it('does not remember entries that are missing', async () => {
+    const gone = path.join(tmp, 'gone.txt')
+    await expect(fsx.statEntry(gone)).rejects.toMatchObject({ code: 'ENOENT' })
+    await write('gone.txt', 'back')
+    expect((await fsx.statEntry(gone)).size).toBe(4)
   })
 })
 

@@ -3113,12 +3113,13 @@ button.link:hover {
   background: var(--accent);
 }
 
+/* In the middle of the gap between two favorites (the bar's gap is 6px). */
 .fb-item.drop-before::before {
-  left: -2px;
+  left: -4px;
 }
 
 .fb-item.drop-after::after {
-  right: -2px;
+  right: -4px;
 }
 
 .fb-item.drop-into {

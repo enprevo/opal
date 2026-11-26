@@ -198,7 +198,7 @@ export const COMMAND_DOCS: { name: string; usage: string; description: string }[
   { name: 'Copy', usage: 'Copy [MOVE] [AS] [HERE] [DUPLICATE] [TO=<path>] [CREATEFOLDER=<name>] [UPDATEALL|UPDATEEXISTING] [WHENEXISTS=ask|skip|replace|rename|keepnewer]', description: 'Copy or move the selected items (default destination: {destpath}).' },
   { name: 'Delete', usage: 'Delete [NORECYCLE|SHIFT] [QUIET]', description: 'Delete the selected items (to trash by default).' },
   { name: 'Rename', usage: 'Rename [ADVANCED] [TO=<name>]', description: 'Inline rename, or the Advanced Rename dialog.' },
-  { name: 'CreateFolder', usage: 'CreateFolder [NAME=<name>]', description: 'Create a new folder in the source ({date|yyyy-MM-dd} macros allowed).' },
+  { name: 'CreateFolder', usage: 'CreateFolder [NAME=<name>] [MOVESELECTED]', description: 'Create a new folder in the source ({date|yyyy-MM-dd} macros allowed); MOVESELECTED moves the selected items into it.' },
   { name: 'CreateFile', usage: 'CreateFile [NAME=<name>]', description: 'Create a new empty file in the source.' },
   { name: 'Clipboard', usage: 'Clipboard COPY | CUT | PASTE | COPYNAMES[=nopaths]', description: 'File clipboard operations; COPYNAMES copies full paths (or names only).' },
   { name: 'Select', usage: 'Select ALL | NONE | INVERT | SIMILAR | RESELECT | SOURCETODEST[=notin|noext] | DESTTOSOURCE[=notin|noext] [DESELECTNOMATCH] | PATTERN[=<wildcard>] [DESELECT] [FILES|DIRS] [EXCLUSIVE]', description: 'Selection by wildcard, by extension, against the other display, or the previous selection.' },
@@ -338,7 +338,9 @@ const handlers: Record<string, Handler> = {
     else A.startInlineRename()
   },
   async createfolder(cmd) {
-    await A.createFolder(argString(cmd.args, 'NAME'))
+    const name = argString(cmd.args, 'NAME')
+    if (argFlag(cmd.args, 'MOVESELECTED')) return A.moveSelectedToNewFolder(name === undefined ? undefined : expandPlaceholders(name, ctx()))
+    await A.createFolder(name)
   },
   async createfile(cmd) {
     await A.createFile(argString(cmd.args, 'NAME'))

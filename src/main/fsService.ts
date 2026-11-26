@@ -54,7 +54,49 @@ export function extOf(name: string, isDir: boolean): string {
   return idx > 0 ? name.slice(idx + 1) : ''
 }
 
+// Entries that could not be read are not asked for again for a while. On a network share one such entry can cost
+// half a second per read, and the system does them one at a time: a DFS link the user may not open makes Linux try
+// to connect to its server on every read (Windows shares the same kind of slow, failing entries).
+const STAT_FAILURE_TTL_MS = 60_000
+const statFailures = new Map<string, { until: number; err: unknown }>()
+
+function recentStatFailure(full: string): unknown {
+  const f = statFailures.get(full)
+  if (!f) return undefined
+  if (f.until > Date.now()) return f.err
+  statFailures.delete(full)
+  return undefined
+}
+
+function rememberStatFailure(full: string, err: unknown): void {
+  // A missing entry may come back any moment: only remember entries that exist but can't be read.
+  if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return
+  if (statFailures.size >= 5000) {
+    const now = Date.now()
+    for (const [k, v] of statFailures) if (v.until <= now) statFailures.delete(k)
+    if (statFailures.size >= 5000) statFailures.clear()
+  }
+  statFailures.set(full, { until: Date.now() + STAT_FAILURE_TTL_MS, err })
+}
+
+/** Forget remembered read failures (all, or the entries of one folder). */
+export function forgetStatFailures(dir?: string): void {
+  if (dir === undefined) return statFailures.clear()
+  for (const k of statFailures.keys()) if (path.dirname(k) === dir) statFailures.delete(k)
+}
+
 export async function statEntry(full: string, hiddenSet?: Set<string>): Promise<FileEntry> {
+  const failed = recentStatFailure(full)
+  if (failed !== undefined) throw failed
+  try {
+    return await readEntry(full, hiddenSet)
+  } catch (err) {
+    rememberStatFailure(full, err)
+    throw err
+  }
+}
+
+async function readEntry(full: string, hiddenSet?: Set<string>): Promise<FileEntry> {
   const name = path.basename(full) || full
   let lst = await fsp.lstat(full)
   const isSymlink = lst.isSymbolicLink()
@@ -83,47 +125,134 @@ export async function statEntry(full: string, hiddenSet?: Set<string>): Promise<
   }
 }
 
-export async function listDir(dir: string): Promise<DirListing> {
+export interface ListOptions {
+  /**
+   * Don't wait for slow entries: once this long has passed and reading has stalled, return the entries still being
+   * read with what the folder listing already says (name, folder or file), and hand them to `onLate` once read.
+   */
+  lateAfterMs?: number
+  onLate?: (dir: string, entries: FileEntry[]) => void
+}
+
+/** Reading counts as stalled when no entry has finished for this long. */
+const LIST_STALL_MS = 150
+
+// Node runs file reads on a few shared threads (4 by default). An entry that blocks for long (a folder on a share
+// that the system tries to connect to) holds one of them, so listings read at most this many entries at once,
+// across all folders: the rest of the app (other folders, settings, free space) always has a thread left.
+const MAX_ENTRY_READS = 3
+let entryReads = 0
+const entryReadQueue: (() => void)[] = []
+
+async function withEntryRead<T>(fn: () => Promise<T>): Promise<T> {
+  if (entryReads < MAX_ENTRY_READS) entryReads++
+  else await new Promise<void>((resolve) => entryReadQueue.push(resolve))
+  try {
+    return await fn()
+  } finally {
+    // Hand the slot straight to a waiting read, or free it. Newest first: that is the folder just opened, while
+    // older reads may belong to a folder already left that is still finishing in the background.
+    const next = entryReadQueue.pop()
+    if (next) next()
+    else entryReads--
+  }
+}
+
+// Listings of the same folder (both panes, a refresh while the first read is still going) share their entry reads.
+const entryReadsInFlight = new Map<string, Promise<FileEntry>>()
+
+function readListedEntry(full: string, hiddenSet: Set<string>): Promise<FileEntry> {
+  const running = entryReadsInFlight.get(full)
+  if (running) return running
+  const p = withEntryRead(() => statEntry(full, hiddenSet)).finally(() => entryReadsInFlight.delete(full))
+  entryReadsInFlight.set(full, p)
+  return p
+}
+
+export async function listDir(dir: string, opts: ListOptions = {}): Promise<DirListing> {
   const resolved = path.resolve(dir)
+  // Ask for the free space now, before the entry reads: on a slow share it would otherwise wait behind them.
+  const space = fsp.statfs(resolved).catch(() => null)
   const [dirents, hiddenSet] = await Promise.all([fsp.readdir(resolved, { withFileTypes: true }), winHiddenNames(resolved)])
-  const entries: FileEntry[] = []
-  const BATCH = 256
-  for (let i = 0; i < dirents.length; i += BATCH) {
-    const slice = dirents.slice(i, i + BATCH)
-    const stats = await Promise.all(
-      slice.map(async (d) => {
-        try {
-          return await statEntry(path.join(resolved, d.name), hiddenSet)
-        } catch {
-          // Locked system files (pagefile.sys...) can't be stat'ed: show them with minimal info.
-          const isDir = d.isDirectory()
-          return {
-            name: d.name,
-            path: path.join(resolved, d.name),
-            isDir,
-            isSymlink: d.isSymbolicLink(),
-            size: 0,
-            mtime: 0,
-            ctime: 0,
-            atime: 0,
-            ext: extOf(d.name, isDir),
-            hidden: d.name.startsWith('.') || hiddenSet.has(d.name.toLowerCase()),
-            readonly: false,
-            mode: 0
-          } satisfies FileEntry
-        }
+  // Entries that can't be read (locked system files like pagefile.sys, folders on a share the user may not open)
+  // are shown with what the folder listing says.
+  const minimal = (d: (typeof dirents)[number]): FileEntry => {
+    const isDir = d.isDirectory()
+    return {
+      name: d.name,
+      path: path.join(resolved, d.name),
+      isDir,
+      isSymlink: d.isSymbolicLink(),
+      size: 0,
+      mtime: 0,
+      ctime: 0,
+      atime: 0,
+      ext: extOf(d.name, isDir),
+      hidden: d.name.startsWith('.') || hiddenSet.has(d.name.toLowerCase()),
+      readonly: false,
+      mode: 0
+    }
+  }
+  const read: (FileEntry | undefined)[] = new Array(dirents.length)
+  let lastDone = Date.now()
+  let next = 0
+  // Once the listing is returned, entries read later are sent in small groups as they come in.
+  let lateBuffer: FileEntry[] | null = null
+  let lateTimer: NodeJS.Timeout | null = null
+  const flushLate = (): void => {
+    if (lateTimer) clearTimeout(lateTimer)
+    lateTimer = null
+    if (lateBuffer?.length) opts.onLate?.(resolved, lateBuffer.splice(0))
+  }
+  const worker = async (): Promise<void> => {
+    while (next < dirents.length) {
+      const i = next++
+      const d = dirents[i]
+      const e = await readListedEntry(path.join(resolved, d.name), hiddenSet).catch(() => minimal(d))
+      read[i] = e
+      lastDone = Date.now()
+      if (lateBuffer) {
+        lateBuffer.push(e)
+        lateTimer ??= setTimeout(flushLate, 100)
+      }
+    }
+  }
+  const all = Promise.all(Array.from({ length: Math.min(MAX_ENTRY_READS, dirents.length) }, worker))
+
+  let entries: FileEntry[]
+  const { lateAfterMs, onLate } = opts
+  if (onLate && lateAfterMs !== undefined && dirents.length) {
+    const started = Date.now()
+    const finished = await new Promise<boolean>((resolve) => {
+      let timer: NodeJS.Timeout | undefined
+      const check = (): void => {
+        const now = Date.now()
+        if (now - started >= lateAfterMs && now - lastDone >= LIST_STALL_MS) resolve(false)
+        else timer = setTimeout(check, 50)
+      }
+      timer = setTimeout(check, lateAfterMs)
+      void all.then(() => {
+        clearTimeout(timer)
+        resolve(true)
       })
-    )
-    entries.push(...stats)
+    })
+    if (finished) entries = read as FileEntry[]
+    else {
+      // Entries already being read finish into the buffer too: everything not in `read` now is sent later.
+      entries = dirents.map((d, i) => read[i] ?? minimal(d))
+      lateBuffer = []
+      void all.then(flushLate)
+    }
+  } else {
+    await all
+    entries = read as FileEntry[]
   }
   const parent = path.dirname(resolved)
   const listing: DirListing = { path: resolved, parent: parent === resolved ? null : parent, entries }
-  try {
-    const sf = await fsp.statfs(resolved)
+  const sf = await space // null: free space is not available for this location
+  if (sf) {
     listing.freeBytes = sf.bavail * sf.bsize
     listing.totalBytes = sf.blocks * sf.bsize
-  } catch {
-    // statfs not supported for this location
   }
   return listing
 }
@@ -1099,8 +1228,15 @@ export async function itemMeta(paths: string[]): Promise<Record<string, { width?
   const out: Record<string, { width?: number; height?: number; items?: number }> = {}
   await Promise.all(
     paths.slice(0, 500).map(async (p) => {
+      if (recentStatFailure(p) !== undefined) {
+        out[p] = {}
+        return
+      }
       try {
-        const st = await fsp.stat(p)
+        const st = await fsp.stat(p).catch((err: unknown) => {
+          rememberStatFailure(p, err)
+          throw err
+        })
         if (st.isDirectory()) {
           out[p] = { items: (await fsp.readdir(p)).length }
           return

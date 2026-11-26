@@ -160,6 +160,29 @@ test('Copy AS, dated folder and Commander keymap switch', async () => {
   await page.keyboard.press('Escape')
 })
 
+test('Move to new folder: selected items go into a folder created here', async () => {
+  const { page } = h
+  await (await item(page, 0, 'notes.txt')).click()
+  await (await item(page, 0, 'readme.md')).click({ modifiers: ['Control'] })
+  await (await item(page, 0, 'readme.md')).click({ button: 'right' })
+  await page.getByTestId('move-to-new-folder').click()
+  await expect(page.getByTestId('prompt-input')).toHaveValue('New Folder')
+  await page.getByTestId('prompt-input').fill('Texts')
+  await page.getByTestId('prompt-input').press('Enter')
+  await expect.poll(() => exists(path.join(h.left, 'Texts', 'notes.txt'))).toBe(true)
+  await expect.poll(() => exists(path.join(h.left, 'Texts', 'readme.md'))).toBe(true)
+  await expect.poll(() => names(page, 0)).toEqual(['docs', 'pics', 'Texts'])
+  await expect.poll(() => selectedNames(page, 0)).toEqual(['Texts'])
+  // Command line, with a free default name.
+  await (await item(page, 0, 'pics')).click()
+  await page.keyboard.press('>')
+  await page.getByTestId('cli-input').fill('CreateFolder MOVESELECTED')
+  await page.getByTestId('cli-input').press('Enter')
+  await expect(page.getByTestId('prompt-input')).toHaveValue('New Folder')
+  await page.getByTestId('prompt-input').press('Enter')
+  await expect.poll(() => exists(path.join(h.left, 'New Folder', 'pics', 'p1.jpg'))).toBe(true)
+})
+
 test('folder tree + and - expand and collapse levels', async () => {
   const { page } = h
   const tree = page.getByTestId('folder-tree')

@@ -140,8 +140,10 @@ It builds Opal for your computer and installs it, then starts it: on Windows for
 shortcut), on macOS in Applications, on Linux with the `.deb` (Debian, Ubuntu, Mint…), the `.rpm` (Fedora, openSUSE,
 when `rpmbuild` is installed) or otherwise as an AppImage in `~/.local/bin` with a menu entry. If Node.js 22.12 or
 newer is missing it offers to install it (winget on Windows, [nvm](https://github.com/nvm-sh/nvm) in your home folder
-on macOS and Linux). Run it again after `git pull` to update. Options: `--no-open` (don't start Opal at the end),
-`--appimage` (Linux: the AppImage).
+on macOS and Linux). Afterwards it deletes the packaged app it made (about 1 GB) and tells how much space it freed;
+the dependencies stay, so updating is quicker. Run it again after `git pull` to update. Options: `--no-open` (don't
+start Opal at the end), `--appimage` (Linux: the AppImage), `--keep` (keep the packaged app in `dist/install`),
+`--clean-all` (also delete the dependencies and the build).
 
 ## Build from source
 

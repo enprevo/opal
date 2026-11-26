@@ -41,9 +41,9 @@ test('favorites bar: drag folders and files in, open them, group them in a folde
   // With the bar shown, favorites are not repeated in the sidebar.
   await expect(p.getByTestId('favorites-section')).toHaveCount(0)
 
-  // Dropping the same item again does not double it.
-  await (await item(p, 0, 'docs')).dragTo(bar)
-  await expect(items).toHaveCount(2)
+  // Dropping the same item again does not double it (dropped where it already is, it stays there).
+  await (await item(p, 0, 'docs')).dragTo(items.first(), { targetPosition: { x: 3, y: 10 } })
+  await expect(items).toHaveText(['docs', 'note.txt'])
 
   // Clicking a folder goes into it.
   await items.first().click()
@@ -236,4 +236,52 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
   await p.getByTestId('favorites-editor').getByTestId('fe-remove').first().click()
   await p.getByTestId('favorites-editor').getByRole('button', { name: 'Cancel' }).click()
   await expect(bar.getByTestId('favbar-item')).toHaveText(['note.txt'])
+})
+
+test('drag a folder or file onto the bar exactly where you want it, also between two favorites', async () => {
+  h = await launch(async (left) => {
+    await write(path.join(left, 'docs', 'a.txt'), 'a')
+    await write(path.join(left, 'music', 'b.txt'), 'b')
+    await write(path.join(left, 'pics', 'c.txt'), 'c')
+    await write(path.join(left, 'note.txt'), 'n')
+    await write(
+      path.join(left, '..', 'userdata', 'opal-settings.json'),
+      JSON.stringify({
+        prefs: {},
+        favorites: [{ path: path.join(left, 'docs') }, { path: path.join(left, 'music') }, { path: path.join(left, 'note.txt'), file: true, label: 'My note' }],
+        recent: []
+      })
+    )
+  })
+  const p = h.page
+  const bar = p.getByTestId('favorites-bar')
+  const items = bar.getByTestId('favbar-item')
+  await expect(items).toHaveText(['docs', 'music', 'My note'])
+
+  /** The middle of the space between two favorites on the bar, in the bar's coordinates. */
+  const gap = async (a: number, b: number) => {
+    const barBox = (await bar.boundingBox())!
+    const ra = (await items.nth(a).boundingBox())!
+    const rb = (await items.nth(b).boundingBox())!
+    return { x: (ra.x + ra.width + rb.x) / 2 - barBox.x, y: barBox.height / 2 }
+  }
+
+  // A new folder dropped in the space between docs and music goes there, not at the end.
+  await (await item(p, 0, 'pics')).dragTo(bar, { targetPosition: await gap(0, 1) })
+  await expect(items).toHaveText(['docs', 'pics', 'music', 'My note'])
+
+  // A file already on the bar, dragged again from the list, moves to the new place and keeps its name.
+  await (await item(p, 0, 'note.txt')).dragTo(bar, { targetPosition: await gap(0, 1) })
+  await expect(items).toHaveText(['docs', 'My note', 'pics', 'music'])
+  await expect(p.getByTestId('toasts')).toContainText('Moved in favorites')
+
+  // Dropped on the left half of a favorite it goes before it; past the last one, at the end.
+  const music = path.join(h.left, 'music')
+  await (await item(p, 0, 'music')).dragTo(items.first(), { targetPosition: { x: 4, y: 10 } })
+  await expect(items).toHaveText(['music', 'docs', 'My note', 'pics'])
+  const last = (await items.last().boundingBox())!
+  const barBox = (await bar.boundingBox())!
+  await (await item(p, 0, 'music')).dragTo(bar, { targetPosition: { x: last.x + last.width + 30 - barBox.x, y: barBox.height / 2 } })
+  await expect(items).toHaveText(['docs', 'My note', 'pics', 'music'])
+  await expect.poll(async () => (await saved(p)).favorites.map((f) => f.path)).toEqual([path.join(h!.left, 'docs'), path.join(h!.left, 'note.txt'), path.join(h!.left, 'pics'), music])
 })

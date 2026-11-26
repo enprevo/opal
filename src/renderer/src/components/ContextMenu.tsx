@@ -47,7 +47,8 @@ import {
   Palette,
   PaintBucket,
   StarOff,
-  Settings2
+  Settings2,
+  FolderInput
 } from 'lucide-react'
 import { activeTab, getState, setState, useStore } from '../state/store'
 import { keyFor, runCommand } from '../state/commands'
@@ -362,6 +363,8 @@ function buildItems(pane: 0 | 1, t: FileEntry | null): MenuEntry[] {
           'sep'
         ] as MenuEntry[])
       : []),
+    { icon: FolderInput, label: 'Move to new folder…', desc: `Create a folder here and move ${what} into it`, hint: keyFor('CreateFolder MOVESELECTED'), testId: 'move-to-new-folder', action: run('CreateFolder MOVESELECTED') },
+    'sep',
     { icon: PencilLine, label: multi ? 'Rename…' : 'Rename', desc: multi ? 'Batch rename with wildcards, regex, numbering and live preview' : 'Edit the name in place', hint: keyFor('Rename'), action: run(multi ? 'Rename ADVANCED' : 'Rename') },
     { icon: Wand2, label: 'Advanced rename…', desc: 'Batch rename with wildcards, regular expressions, numbering, case and date macros', hint: keyFor('Rename ADVANCED'), action: run('Rename ADVANCED') },
     { icon: Tag, label: 'Label', desc: 'Colour labels (tags) to find and group items later', submenu: labelSubmenu(paths) },

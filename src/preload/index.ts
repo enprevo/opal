@@ -104,6 +104,12 @@ const api = {
     ipcRenderer.on('watch:changed', h)
     return () => ipcRenderer.removeListener('watch:changed', h)
   },
+  /** Entries of a folder that were still being read when its listing was returned, now read. */
+  onListLate: (cb: (dir: string, entries: FileEntry[]) => void): (() => void) => {
+    const h = (_e: IpcRendererEvent, dir: string, entries: FileEntry[]): void => cb(dir, entries)
+    ipcRenderer.on('fs:listLate', h)
+    return () => ipcRenderer.removeListener('fs:listLate', h)
+  },
   pathForFile: (f: File): string => webUtils.getPathForFile(f),
 
   onJobProgress: (cb: (p: JobProgress) => void): (() => void) => {

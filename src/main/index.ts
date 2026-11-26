@@ -130,7 +130,17 @@ function registerIpc(): void {
   ipcMain.handle('settings:get', () => settings.get())
   ipcMain.handle('settings:set', (_e, patch: Partial<PersistedState>) => settings.update(patch))
 
-  ipcMain.handle('fs:list', (_e, p: string, flat?: boolean) => (flat ? fsx.listFlat(p) : fsx.listDir(p)))
+  ipcMain.handle('fs:list', (e, p: string, flat?: boolean) =>
+    flat
+      ? fsx.listFlat(p)
+      : fsx.listDir(p, {
+          // Show the folder at once even when some entries are slow to read (network shares); send them when read.
+          lateAfterMs: 250,
+          onLate: (dir, entries) => {
+            if (!e.sender.isDestroyed()) e.sender.send('fs:listLate', dir, entries)
+          }
+        })
+  )
   ipcMain.handle('fs:hash', (_e, p: string, algo: 'md5' | 'sha1' | 'sha256') => fsx.hashFile(p, algo))
   ipcMain.handle('fs:duplicates', async (_e, root: string, opts: { minSize?: number; recursive?: boolean }, jobId: string) => {
     const token = tokenFor(jobId)

@@ -102,6 +102,7 @@ export async function bootstrap(): Promise<void> {
       }
     }
   })
+  api().onListLate(applyLateEntries)
   installKeyboard()
 
   await Promise.all(
@@ -368,6 +369,47 @@ export async function navigate(pane: 0 | 1, rawPath: string, opts: NavOptions = 
 // ---------------------------------------------------------------------------
 // Expandable folders (expand in place in the file display)
 // ---------------------------------------------------------------------------
+
+/**
+ * A folder listing came back before some of its entries were read (slow network share): they were shown with
+ * their name only, and now their details (dates, size, attributes) are in. Put them in wherever the folder is shown.
+ */
+export function applyLateEntries(dir: string, late: FileEntry[]): void {
+  if (!late.length) return
+  const byPath = new Map(late.map((e) => [e.path, e]))
+  const merge = (list: FileEntry[]): FileEntry[] | null => {
+    let changed = false
+    const out = list.map((e) => {
+      const n = byPath.get(e.path)
+      if (!n) return e
+      changed = true
+      return e.depth === undefined ? n : { ...n, depth: e.depth }
+    })
+    return changed ? out : null
+  }
+  for (const pane of [0, 1] as const) {
+    for (const t of getState().panes[pane].tabs) {
+      const inListing = !!t.listing && !t.flat && samePath(t.listing.path, dir)
+      const childKeys = Object.keys(t.children).filter((k) => samePath(k, dir))
+      if (!inListing && !childKeys.length) continue
+      updateTab(pane, t.id, (cur) => {
+        const patch: Partial<typeof cur> = {}
+        if (cur.listing && !cur.flat && samePath(cur.listing.path, dir)) {
+          const entries = merge(cur.listing.entries)
+          if (entries) patch.listing = { ...cur.listing, entries }
+        }
+        let children: Record<string, FileEntry[]> | null = null
+        for (const k of Object.keys(cur.children)) {
+          if (!samePath(k, dir)) continue
+          const kids = merge(cur.children[k])
+          if (kids) (children ??= { ...cur.children })[k] = kids
+        }
+        if (children) patch.children = children
+        return patch
+      })
+    }
+  }
+}
 
 async function loadChildren(paths: string[]): Promise<Record<string, FileEntry[]>> {
   const out: Record<string, FileEntry[]> = {}
@@ -1071,6 +1113,41 @@ export async function createFolder(name?: string): Promise<void> {
   }
 }
 
+/** First "New Folder", "New Folder 2", … that doesn't exist yet in `dir`. */
+async function freeFolderName(dir: string, base = 'New Folder'): Promise<string> {
+  const names = [base, ...Array.from({ length: 98 }, (_, i) => `${base} ${i + 2}`)]
+  const exists = await api().exists(names.map((n) => join(dir, n)))
+  return names[exists.indexOf(false)] ?? base
+}
+
+/** Create a folder in the current folder and move the selected items into it (Finder's "New Folder with Selection"). */
+export async function moveSelectedToNewFolder(name?: string): Promise<void> {
+  const pane = getState().activePane
+  const items = selectedEntries(pane)
+  if (!items.length) return
+  const dir = activeTab(pane).path
+  const suggested = name ?? (await freeFolderName(dir))
+  const n =
+    name ??
+    (await openDialog<string>('prompt', {
+      title: items.length === 1 ? `Move "${items[0].name}" to a new folder` : `Move ${items.length} items to a new folder`,
+      label: 'New folder name',
+      value: suggested,
+      validateName: true
+    }))
+  if (!n) return
+  let created: string
+  try {
+    created = await api().mkdir(dir, n)
+  } catch (e) {
+    toast(cleanError(e), 'error')
+    return
+  }
+  await transferItems('move', items.map((e) => e.path), created, undefined, { noNestedPrompt: true })
+  await refreshPane(pane, basename(created))
+  updateTab(pane, null, () => ({ selected: new Set([created]), focusPath: created, anchorPath: created }))
+}
+
 export async function createFile(name?: string): Promise<void> {
   const pane = getState().activePane
   const dir = activeTab(pane).path
@@ -1252,11 +1329,15 @@ export async function addFavoritePaths(paths: string[], target: FavoriteTarget =
     }
   }
   if (!added.length) return
-  const { favorites, skipped } = insertFavorites(getState().favorites, added, target)
-  if (favorites !== getState().favorites) saveFavorites(favorites)
-  const n = added.length - skipped
+  const before = getState().favorites
+  const { favorites, added: n, moved } = insertFavorites(before, added, target)
+  if (favorites !== before) {
+    keepEmptiedGroups(before, favorites)
+    saveFavorites(favorites)
+  }
   const where = target.group ? ` in "${target.group}"` : ''
   if (n) toast(n === 1 ? `Added to favorites${where}` : `Added ${n} favorites${where}`)
+  else if (moved) toast(moved === 1 ? `Moved in favorites${where}` : `Moved ${moved} favorites${where}`)
   else toast(`Already in favorites${where}`)
 }
 

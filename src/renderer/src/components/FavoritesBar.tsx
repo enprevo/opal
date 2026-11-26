@@ -158,8 +158,8 @@ export function FavoritesBar() {
     if ('end' in at) return {}
     const slot = slots[at.slot]
     if (at.edge === 'into' && slot.kind === 'group') return { group: slot.name }
-    if (at.edge === 'before') return { beforeIndex: slotIndex(slot) }
-    for (let k = at.slot + 1; k < slots.length; k++) {
+    // Before a slot: before its first favorite (an empty group has none: before the next one that has).
+    for (let k = at.edge === 'before' ? at.slot : at.slot + 1; k < slots.length; k++) {
       const i = slotIndex(slots[k])
       if (i !== null) return { beforeIndex: i }
     }
@@ -188,6 +188,20 @@ export function FavoritesBar() {
     } else cancelSpring()
   }
 
+  /**
+   * Where a drop on the bar itself lands (between two favorites, before the first or after the last): the gap nearest
+   * to the pointer, so a drop in the space between favorites goes exactly there.
+   */
+  const gapAt = (clientX: number): DropAt => {
+    const els = barRef.current ? [...barRef.current.querySelectorAll<HTMLElement>(':scope > .fb-item')] : []
+    if (!els.length) return { end: true }
+    for (let k = 0; k < els.length; k++) {
+      const r = els[k].getBoundingClientRect()
+      if (clientX < r.left + r.width / 2) return { slot: k, edge: 'before' }
+    }
+    return { slot: els.length - 1, edge: 'after' }
+  }
+
   const onSlotDrop = (e: React.DragEvent, k: number): void => {
     const at = drop && !('end' in drop) && drop.slot === k ? drop : { slot: k, edge: 'after' as const }
     cancelSpring()
@@ -213,7 +227,9 @@ export function FavoritesBar() {
         e.preventDefault()
         e.dataTransfer.dropEffect = e.dataTransfer.types.includes(FAV_TYPE) ? 'move' : 'copy'
         cancelSpring()
-        if (!drop || !('end' in drop)) setDrop({ end: true })
+        const at = gapAt(e.clientX)
+        const same = drop && ('end' in at ? 'end' in drop : !('end' in drop) && drop.slot === at.slot && drop.edge === at.edge)
+        if (!same) setDrop(at)
       }}
       onDragLeave={(e) => {
         if (!barRef.current?.contains(e.relatedTarget as Node | null)) {
@@ -224,7 +240,7 @@ export function FavoritesBar() {
       onDrop={(e) => {
         setDrop(null)
         cancelSpring()
-        dropOn(e, {})
+        dropOn(e, targetOf(gapAt(e.clientX)))
       }}
     >
       {slots.length === 0 && (
