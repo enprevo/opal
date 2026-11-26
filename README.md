@@ -31,6 +31,7 @@ understands what your documents are *about*, without sending anything to the clo
 | | |
 | --- | --- |
 | **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, a favorites bar for folders and files (drag them in, groups as drop-down folders), favorites in collapsible groups with their own shortcut keys, folder colours (icon and row background), recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
+| **Find as you type** | Just type in a file list: matches are highlighted and <kbd>↑</kbd>/<kbd>↓</kbd> jump between them. <kbd>Tab</kbd> switches to *Filter* (hide the rest) and *Subfolders* (search the whole branch); type <kbd>/</kbd> to jump to a favorite or a path. |
 | **Expandable folders** | In Details view folders open in place like a tree: <kbd>→</kbd> expands, <kbd>←</kbd> collapses or jumps to the parent. Copying nested items asks whether to recreate the structure. |
 | **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, syntax-highlighted code with line numbers, archive contents, folder sizes — and use the arrow keys to flip through files. |
 | **Column view** | Finder-style Miller columns with a preview column. |
@@ -83,6 +84,7 @@ where Finder conventions are added on top: <kbd>⌘</kbd>+<kbd>⌫</kbd> moves t
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>5</kbd> (macOS: <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>3</kbd>) | Column view | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1…7</kbd> | Colour labels |
 | <kbd>F6</kbd> / <kbd>F7</kbd> / <kbd>F8</kbd> | Dual pane / viewer / tree | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo |
 | <kbd>></kbd> | Command line | <kbd>F1</kbd> | All commands and keys |
+| Type any letters | Find as you type (<kbd>Tab</kbd>: filter / subfolders) | <kbd>/</kbd> | Go to a favorite or path |
 
 ## Semantic search
 
