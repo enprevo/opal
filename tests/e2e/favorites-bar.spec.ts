@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import path from 'node:path'
-import { launch, write, item, focusedName, type Harness } from './helpers'
+import { launch, write, item, focusedName, cssValue, type Harness } from './helpers'
 
 let h: Harness | null = null
 
@@ -167,25 +167,25 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
   await expect(row('[data-group="Work"]').locator('.fb-group-icon')).toHaveCSS('color', 'rgb(67, 184, 106)')
 
   // Drag a favorite onto the folder on the left.
-  await row(`[data-path="${docs}"]`).dragTo(tree.nth(1))
+  await row(`[data-path="${cssValue(docs)}"]`).dragTo(tree.nth(1))
   await expect(row('[data-path]:not([data-child])')).toHaveCount(2)
   await expect(tree.nth(1)).toContainText('1')
 
   // A folder shows what is inside it, on the right under its row and on the left under its name; the arrow hides it.
-  await expect(row(`[data-child][data-path="${docs}"]`)).toBeVisible()
+  await expect(row(`[data-child][data-path="${cssValue(docs)}"]`)).toBeVisible()
   await expect(ed.getByTestId('fe-tree-item')).toHaveText(['docs'])
   await row('[data-group="Work"]').getByTestId('fe-twisty').click()
   await expect(row('[data-child]')).toHaveCount(0)
   await expect(ed.getByTestId('fe-tree-item')).toHaveCount(0)
   await ed.getByTestId('fe-tree-twisty').click()
-  await expect(row(`[data-child][data-path="${docs}"]`)).toBeVisible()
+  await expect(row(`[data-child][data-path="${cssValue(docs)}"]`)).toBeVisible()
 
   // Drag to reorder: note.txt before music.
-  await row(`[data-path="${note}"]`).dragTo(row(`[data-path="${music}"]`), { targetPosition: { x: 40, y: 3 } })
+  await row(`[data-path="${cssValue(note)}"]`).dragTo(row(`[data-path="${cssValue(music)}"]`), { targetPosition: { x: 40, y: 3 } })
   await expect.poll(() => row('[data-path]:not([data-child])').evaluateAll((els) => els.map((e) => e.getAttribute('data-path')))).toEqual([note, music])
 
   // Right-click → Move to → Work.
-  await row(`[data-path="${music}"]`).click({ button: 'right' })
+  await row(`[data-path="${cssValue(music)}"]`).click({ button: 'right' })
   await p.getByTestId('fe-menu-move').hover()
   await p.getByTestId('fe-move-group').click()
   await expect(row('[data-path]:not([data-child])')).toHaveCount(1)
@@ -194,10 +194,10 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
   // Open the folder and rename an item in place (double-click).
   await tree.nth(1).click()
   await expect(row('[data-path]')).toHaveCount(2)
-  await row(`[data-path="${docs}"]`).dblclick()
+  await row(`[data-path="${cssValue(docs)}"]`).dblclick()
   await ed.getByTestId('fe-name-input').fill('Documents')
   await ed.getByTestId('fe-name-input').press('Enter')
-  await expect(row(`[data-path="${docs}"]`)).toContainText('Documents')
+  await expect(row(`[data-path="${cssValue(docs)}"]`)).toContainText('Documents')
 
   // Search across folders.
   await ed.getByTestId('fe-search').fill('mus')
@@ -206,7 +206,7 @@ test('edit favorites like a bookmark manager: folders on the left, drag between 
 
   // A shortcut taken by a command is refused with the reason; a free one is kept.
   await ed.getByTestId('fe-crumb-bar').click()
-  const noteRow = row(`[data-path="${note}"]`)
+  const noteRow = row(`[data-path="${cssValue(note)}"]`)
   await noteRow.hover()
   await noteRow.getByTestId('shortcut-field').click()
   await p.keyboard.press('Control+c')

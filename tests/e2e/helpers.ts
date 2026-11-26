@@ -84,3 +84,8 @@ export async function exists(p: string): Promise<boolean> {
     return false
   }
 }
+
+/** A path as the value of a CSS attribute selector (`[data-path="…"]`): backslashes and quotes are escaped. */
+export function cssValue(p: string): string {
+  return p.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}

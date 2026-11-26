@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import path from 'node:path'
-import { launch, write, item, type Harness } from './helpers'
+import { launch, write, item, cssValue, type Harness } from './helpers'
 
 let h: Harness | null = null
 
@@ -29,7 +29,7 @@ test('folder color: path bar, folder tree and file list follow the colors chosen
   })
   const p = h.page
   const crumb = p.getByTestId('breadcrumbs-0').getByTestId('crumb').last()
-  const node = p.locator(`[data-tree-path="${h.left}"]`)
+  const node = p.locator(`[data-tree-path="${cssValue(h.left)}"]`)
 
   // Icon color from the path bar: shows in the path bar and in the folder tree.
   await crumb.click({ button: 'right' })
@@ -72,7 +72,7 @@ test('favorite with a shortcut: set from the folder tree, opens the folder from 
   const crumbs = p.getByTestId('breadcrumbs-0').getByTestId('crumb')
   const here = path.basename(h.left)
 
-  await p.locator(`[data-tree-path="${h.left}"]`).click({ button: 'right' })
+  await p.locator(`[data-tree-path="${cssValue(h.left)}"]`).click({ button: 'right' })
   await p.getByTestId('folder-shortcut').click()
   const dialog = p.getByTestId('folder-options-dialog')
   await expect(dialog).toBeVisible()
