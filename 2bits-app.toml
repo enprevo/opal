@@ -1,0 +1,29 @@
+# 2bits-app.toml: tells 2BiTS Launcher how to install, update and open Opal.
+# The app doesn't read this file: it still installs and runs on its own as before.
+# Commands run inside the downloaded folder (sh -c on Linux/macOS, cmd /C on Windows).
+# A new version is a new git tag vX.Y.Z (track = "tags") or a new commit on the
+# followed branch (track = "branch"; empty branch = the server's default branch).
+
+[app]
+id = "opal"
+name = "Opal"
+description = "File manager"
+icon = "build/icon.png"
+
+[version]
+track = "tags"
+
+[linux]
+install = "./install.sh --no-open"
+run = "if command -v opal-file-manager >/dev/null 2>&1; then exec opal-file-manager \"$@\"; else exec \"$HOME/.local/bin/Opal.AppImage\" \"$@\"; fi"
+install_in_terminal = true
+
+[windows]
+install = "install.cmd"
+run = 'if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Opal.lnk" (start "" "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Opal.lnk") else (start "" "%LOCALAPPDATA%\Programs\opal-file-manager\Opal.exe")'
+install_in_terminal = true
+
+[macos]
+install = "./install.sh --no-open"
+run = "exec open -a Opal --args \"$@\""
+install_in_terminal = true
