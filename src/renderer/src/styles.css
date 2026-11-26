@@ -3561,3 +3561,105 @@ button.link:hover {
   color: var(--muted);
   font-size: 12px;
 }
+
+
+/* Find as you type */
+.fayt {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 30px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow), 0 0 0 3px var(--accent-weak);
+}
+.fayt.no-match {
+  border-color: #ff5f57;
+  box-shadow: var(--shadow), 0 0 0 3px color-mix(in srgb, #ff5f57 25%, transparent);
+}
+.fayt-modes {
+  display: flex;
+  gap: 2px;
+  flex: none;
+}
+.fayt-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.fayt-mode.on {
+  background: var(--accent-weak);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.fayt-input {
+  flex: 1;
+  min-width: 80px;
+  border: none !important;
+  background: transparent !important;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 2px 0;
+  box-shadow: none !important;
+}
+.fayt-count {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.fayt.no-match .fayt-count {
+  color: #ff5f57;
+  font-weight: 600;
+}
+.fayt-hint {
+  font-size: 10px;
+  white-space: nowrap;
+}
+.fayt-hint {
+    display: none;
+  }
+.fayt-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 6px);
+  max-height: 300px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 4px;
+}
+.fayt-sug {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fayt-sug.on,
+.fayt-sug:hover {
+  background: var(--accent-weak);
+}
+mark.fayt-hit {
+  background: color-mix(in srgb, #ffd60a 55%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0;
+}

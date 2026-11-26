@@ -5,6 +5,7 @@ import * as A from '../state/actions'
 import { breadcrumbs, basename } from '@shared/paths'
 import { formatSize, pluralize } from '@shared/format'
 import { FileList } from './FileList'
+import { FaytBar } from './FindAsYouType'
 import { openFolderMenu } from './ContextMenu'
 
 export function FileDisplay({ pane }: { pane: 0 | 1 }) {
@@ -21,6 +22,7 @@ export function FileDisplay({ pane }: { pane: 0 | 1 }) {
       <TabBar pane={pane} />
       <LocationBar pane={pane} dual={dual} isSource={isSource} />
       <FileList pane={pane} />
+      <FaytBar pane={pane} />
       {showStatus && <DisplayStatus pane={pane} />}
     </div>
   )

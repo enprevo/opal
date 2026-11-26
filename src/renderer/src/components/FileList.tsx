@@ -32,6 +32,7 @@ import { fileTypeLabel, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@shared/filet
 import { attrString } from '@shared/sort'
 import { basename, dirname, stem, validateFileName } from '@shared/paths'
 import { FileIcon, thumbUrl } from './FileIcon'
+import { NameText } from './FindAsYouType'
 import { readDragPaths } from './FileDisplay'
 
 interface RenderCtx {
@@ -635,7 +636,7 @@ function DetailsRow({ entry, top, height, pane, ctx, className, itemProps }: Row
               <RenameInput pane={pane} entry={entry} />
             ) : (
               <span className="name-text" data-help-anchor="">
-                {displayName(entry, prefs)}
+                <NameText pane={pane} name={displayName(entry, prefs)} />
               </span>
             )}
             {c === 'name' && !columns.includes('label') && <LabelDots ids={ctx.labels[entry.path]} defs={ctx.labelDefs} />}
@@ -694,7 +695,7 @@ function GridCell({
         <RenameInput pane={pane} entry={entry} />
       ) : (
         <div className="label" data-help-anchor="">
-          {displayName(entry, prefs)}
+          <NameText pane={pane} name={displayName(entry, prefs)} />
           <LabelDots ids={labels} defs={labelDefs} />
         </div>
       )}
@@ -786,7 +787,9 @@ function ColumnView({
               return (
                 <div key={e.path} className={`${base} mrow`} style={tintStyle(ctx, e)} {...props}>
                   <FileIcon path={e.path} isDir={e.isDir} />
-                  <span className="name-text">{displayName(e, prefs)}</span>
+                  <span className="name-text">
+                    <NameText pane={pane} name={displayName(e, prefs)} />
+                  </span>
                   <LabelDots ids={ctx.labels[e.path]} defs={ctx.labelDefs} />
                   {e.isDir && <ChevronRight size={12} className="mrow-arrow" />}
                 </div>

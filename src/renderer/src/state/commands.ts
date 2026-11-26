@@ -580,9 +580,6 @@ export function comboFromEvent(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
-let typeAheadBuffer = ''
-let typeAheadTimer: ReturnType<typeof setTimeout> | null = null
-
 function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null
   if (!el) return false
@@ -639,7 +636,7 @@ export function handleListKey(e: KeyboardEvent): boolean {
       A.moveFocus(pane, 'end', mods)
       return true
     case ' ':
-      if (mods.ctrl || typeAheadBuffer) return false
+      if (mods.ctrl || s.fayt) return false
       // Finder-style Quick Look on Space (configurable); Shift+Space / Insert toggle selection.
       if (s.prefs.spaceAction === 'quicklook' && !e.shiftKey) A.toggleQuickLook()
       else A.toggleFocusedSelection(pane)
@@ -655,6 +652,7 @@ export function handleListKey(e: KeyboardEvent): boolean {
     }
     case 'Escape':
       if (s.quickLook) A.toggleQuickLook(false)
+      else if (s.fayt) void A.closeFayt(false)
       else if (tab.filter) A.setTabProps(pane, { filter: '' })
       else A.selectNone(pane)
       return true
@@ -698,18 +696,17 @@ function onKeyDown(e: KeyboardEvent): void {
     return
   }
   if (printable && !bound) {
-    if (e.key === ' ' && !typeAheadBuffer) {
+    if (e.key === ' ' && !s.fayt) {
       if (handleListKey(e)) e.preventDefault()
       return
     }
+    // Any other character starts (or continues) find-as-you-type.
     e.preventDefault()
-    typeAheadBuffer += e.key
-    if (typeAheadTimer) clearTimeout(typeAheadTimer)
-    typeAheadTimer = setTimeout(() => (typeAheadBuffer = ''), 900)
-    if (!A.focusByPrefix(s.activePane, typeAheadBuffer) && typeAheadBuffer.length === 1) typeAheadBuffer = ''
+    if (s.fayt) A.setFaytText(s.fayt.text + e.key)
+    else A.openFayt(s.activePane, e.key)
     return
   }
-  if (bound && !(printable && typeAheadBuffer)) {
+  if (bound) {
     if (combo === 'Tab' && !s.prefs.dualDisplay) return
     e.preventDefault()
     void runCommand(bound)

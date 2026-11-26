@@ -13,6 +13,7 @@ import {
   updateTab,
   visibleEntries,
   activeColumnDir,
+  type FaytMode,
   type PaneState,
   type TabState
 } from './store'
@@ -834,6 +835,100 @@ export function focusByPrefix(pane: 0 | 1, prefix: string): boolean {
   if (!hit) return false
   updateTab(pane, null, (t) => ({ focusPath: hit.path, anchorPath: hit.path, selected: new Set([hit.path]), scrollTick: t.scrollTick + 1 }))
   return true
+}
+
+/** Case-insensitive "contains"; wildcards (* ?) when the text has them. */
+export function faytMatcher(text: string): (name: string) => boolean {
+  const t = text.trim()
+  if (/[*?]/.test(t)) {
+    try {
+      const re = compilePattern(t)
+      return (n) => re(n)
+    } catch {
+      return () => false
+    }
+  }
+  const low = t.toLowerCase()
+  return (n) => n.toLowerCase().includes(low)
+}
+
+export function faytMatches(pane: 0 | 1, text: string): FileEntry[] {
+  const s = getState()
+  if (!text.trim() || text.startsWith('/')) return []
+  const match = faytMatcher(text)
+  return visibleEntries(activeTab(pane, s), s.prefs).filter((e) => match(e.name))
+}
+
+function focusEntry(pane: 0 | 1, path: string): void {
+  updateTab(pane, null, (t) => ({ focusPath: path, anchorPath: path, selected: new Set([path]), scrollTick: t.scrollTick + 1 }))
+}
+
+/** Find mode: keep the focused item while it still matches, else the first name starting with the text, else the first containing it. */
+function faytJump(pane: 0 | 1, text: string): void {
+  const matches = faytMatches(pane, text)
+  if (!matches.length) return
+  const tab = activeTab(pane)
+  if (matches.some((m) => m.path === tab.focusPath)) return
+  const low = text.toLowerCase()
+  focusEntry(pane, (matches.find((m) => m.name.toLowerCase().startsWith(low)) ?? matches[0]).path)
+}
+
+export function openFayt(pane: 0 | 1, text: string): void {
+  setActivePane(pane)
+  setState({ fayt: { pane, text, mode: 'find' } })
+  faytJump(pane, text)
+}
+
+export function setFaytText(text: string): void {
+  const f = getState().fayt
+  if (!f) return
+  setState({ fayt: { ...f, text } })
+  if (text.startsWith('/')) return
+  if (f.mode === 'find') faytJump(f.pane, text)
+  else setTabProps(f.pane, { filter: text })
+}
+
+/** Next / previous match (find mode). */
+export function faytStep(dir: 1 | -1): void {
+  const f = getState().fayt
+  if (!f) return
+  if (f.mode !== 'find') {
+    moveFocus(f.pane, dir, { shift: false, ctrl: false })
+    return
+  }
+  const matches = faytMatches(f.pane, f.text)
+  if (!matches.length) return
+  const i = matches.findIndex((m) => m.path === activeTab(f.pane).focusPath)
+  focusEntry(f.pane, matches[(i + dir + matches.length) % matches.length].path)
+}
+
+export async function setFaytMode(mode: FaytMode): Promise<void> {
+  const f = getState().fayt
+  if (!f || f.mode === mode) return
+  setState({ fayt: { ...f, mode } })
+  const tab = activeTab(f.pane)
+  if (mode === 'find') {
+    setTabProps(f.pane, { filter: '' })
+    if (tab.flat) await toggleFlatView(f.pane, false)
+    faytJump(f.pane, f.text)
+    return
+  }
+  // Filter shows only matching items; "deep" also lists every subfolder (Flat View) and filters it.
+  if (mode === 'deep' && !tab.flat) await toggleFlatView(f.pane, true)
+  if (mode === 'filter' && tab.flat) await toggleFlatView(f.pane, false)
+  setTabProps(f.pane, { filter: f.text })
+}
+
+/** Closes the bar. Filters stay when `keep` is set (Enter), and are removed otherwise (Esc). */
+export async function closeFayt(keep = false): Promise<void> {
+  const f = getState().fayt
+  if (!f) return
+  setState({ fayt: null })
+  if (f.mode !== 'find' && !keep) {
+    setTabProps(f.pane, { filter: '' })
+    if (activeTab(f.pane).flat) await toggleFlatView(f.pane, false)
+  }
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-pane="${f.pane}"] .file-scroll`)?.focus())
 }
 
 export function toggleFocusedSelection(pane: 0 | 1): void {

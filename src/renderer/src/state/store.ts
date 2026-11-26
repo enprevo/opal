@@ -124,7 +124,11 @@ export interface AppState {
   /** Quick Look (Space) preview overlay. */
   quickLook: boolean
   semantic: SemanticStatus | null
+  /** Find-as-you-type bar of a pane: jump to matches, filter them, or search the subfolders too. */
+  fayt: { pane: 0 | 1; text: string; mode: FaytMode } | null
 }
+
+export type FaytMode = 'find' | 'filter' | 'deep'
 
 let tabCounter = 0
 
@@ -168,6 +172,7 @@ const initial: AppState = {
   folderFormats: {},
   quickLook: false,
   semantic: null,
+  fayt: null,
   prefs: { ...DEFAULT_PREFS },
   favorites: [],
   recent: [],
