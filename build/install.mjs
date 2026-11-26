@@ -8,9 +8,11 @@
  *  - macOS:   copies Opal.app to /Applications (or ~/Applications when that is not writable), signed for this Mac.
  *  - Linux:   the .deb with apt (Debian, Ubuntu, Mint...), the .rpm with dnf or zypper (Fedora, openSUSE) when
  *             rpmbuild is there, otherwise the AppImage in ~/.local/bin with an entry in the applications menu.
- * Then it starts Opal. Running it again updates the installed copy.
+ * Then it starts Opal and deletes what is no longer needed (the packaged app). Running it again updates the
+ * installed copy.
  *
- * Options: --no-open (do not start Opal at the end), --appimage (Linux: the AppImage even where apt or dnf exist).
+ * Options: --no-open (do not start Opal at the end), --appimage (Linux: the AppImage even where apt or dnf exist),
+ * --keep (keep the packaged app in dist/install), --clean-all (also delete the dependencies and the build).
  */
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -62,9 +64,66 @@ function step(text) {
   console.log(`\n\x1b[1m▸ ${text}\x1b[0m`)
 }
 
+/** Temporary files to delete when the installer ends, however it ends. */
+const temporary = new Set()
+let keepPackages = false
+
 function fail(text) {
   console.error(`\n\x1b[31m✖ ${text}\x1b[0m`)
+  cleanUp(false)
   process.exit(1)
+}
+
+/**
+ * Size in bytes of a file or folder (links are not followed).
+ * @param {string} p
+ * @returns {number}
+ */
+export function sizeOf(p) {
+  let st
+  try {
+    st = fs.lstatSync(p)
+  } catch {
+    return 0
+  }
+  if (!st.isDirectory()) return st.size
+  let total = 0
+  for (const name of fs.readdirSync(p)) total += sizeOf(path.join(p, name))
+  return total
+}
+
+/**
+ * "1.2 GB", "350 MB".
+ * @param {number} bytes
+ */
+export function formatSize(bytes) {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`
+  if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`
+  return `${Math.max(1, Math.round(bytes / 1e3))} kB`
+}
+
+/**
+ * Deletes what is no longer needed once Opal is installed: the packaged app and its temporary copy (unless --keep),
+ * and with --clean-all also the dependencies and the build (the next install downloads and builds them again).
+ * Returns the bytes freed.
+ * @param {boolean} all
+ */
+function cleanUp(all) {
+  const paths = [...temporary]
+  if (!keepPackages) paths.push(path.join(root, OUT))
+  if (all) paths.push(path.join(root, 'node_modules'), path.join(root, 'out'))
+  let freed = 0
+  for (const p of paths) {
+    const size = sizeOf(p)
+    try {
+      fs.rmSync(p, { recursive: true, force: true, maxRetries: 3 })
+      freed += size
+    } catch {
+      // A file still in use (Windows): it is left for the next run.
+    }
+  }
+  temporary.clear()
+  return freed
 }
 
 /** Runs a command in the project folder, showing its output; stops the install when it fails. */
@@ -192,13 +251,13 @@ function installLinux(open, appImage) {
   if (!pkg) fail(`The .${target} package was not found after packaging.`)
   // apt reads the package as its own "_apt" user, which cannot always enter the project folder.
   const copy = path.join(os.tmpdir(), path.basename(pkg))
+  temporary.add(copy)
   fs.copyFileSync(pkg, copy)
   fs.chmodSync(copy, 0o644)
   step('Installing Opal')
   if (target === 'deb') sudo(['apt-get', 'install', '-y', copy], 'Installing the .deb')
   else if (has('dnf')) sudo(['dnf', 'install', '-y', copy], 'Installing the .rpm')
   else sudo(['zypper', '--non-interactive', 'install', '--allow-unsigned-rpm', copy], 'Installing the .rpm')
-  fs.rmSync(copy, { force: true })
   console.log('Opal is in the applications menu; from a terminal: opal-file-manager')
   if (open) start('opal-file-manager')
 }
@@ -206,6 +265,7 @@ function installLinux(open, appImage) {
 function main() {
   const args = process.argv.slice(2)
   const open = !args.includes('--no-open')
+  keepPackages = args.includes('--keep')
   if (!nodeIsRecent(process.versions.node)) fail(`Opal needs Node.js 22.12 or newer (this is ${process.versions.node}).`)
   if (!['win32', 'darwin', 'linux'].includes(process.platform)) fail(`This installer works on Windows, macOS and Linux, not on ${process.platform}.`)
 
@@ -217,6 +277,14 @@ function main() {
   if (isWin) installWindows(open)
   else if (isMac) installMac(open)
   else installLinux(open, args.includes('--appimage'))
+
+  step('Deleting what is no longer needed')
+  const all = args.includes('--clean-all')
+  const freed = cleanUp(all)
+  console.log(
+    `${freed ? `Freed ${formatSize(freed)}` : 'Nothing to delete'}${keepPackages ? ` (the package is kept in ${OUT})` : ''}.` +
+      (all ? '' : ' The dependencies stay, so updating is quicker; --clean-all deletes them too.')
+  )
 
   console.log('\n\x1b[32m✔ Opal is installed.\x1b[0m To update it later: get the latest code and run the installer again.')
 }

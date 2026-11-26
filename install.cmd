@@ -1,7 +1,8 @@
 @echo off
 rem Installs Opal on this Windows computer from this folder, in one step: double-click install.cmd
 rem When Node.js (22.12 or newer) is missing it offers to install it with winget.
-rem Options: --no-open (do not start Opal at the end).
+rem Options: --no-open (do not start Opal at the end), --keep (keep the packaged app),
+rem --clean-all (also delete the dependencies and the build afterwards).
 setlocal
 cd /d "%~dp0"
 

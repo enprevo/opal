@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs Opal on this Mac or Linux computer from this folder, in one step:  ./install.sh
 # When Node.js (22.12 or newer) is missing it offers to install it with nvm, in your home folder.
-# Options: --no-open (do not start Opal at the end), --appimage (Linux: install the AppImage).
+# Options: --no-open (do not start Opal at the end), --appimage (Linux: install the AppImage),
+# --keep (keep the packaged app), --clean-all (also delete the dependencies and the build afterwards).
 set -e
 cd "$(dirname "$0")"
 
