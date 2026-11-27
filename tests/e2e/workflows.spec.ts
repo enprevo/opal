@@ -254,7 +254,7 @@ test('favorites, theme and settings persist to disk', async () => {
   const { page } = h
   await page.locator('[data-testid="list-0"]').click({ position: { x: 300, y: 300 } })
   await page.keyboard.press('Control+D')
-  await expect(page.getByTestId('favorite-item')).toHaveCount(1)
+  await expect(page.getByTestId('favbar-item')).toHaveCount(1)
   await page.getByTestId('tb-theme').click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
   await expect

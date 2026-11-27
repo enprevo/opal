@@ -198,11 +198,11 @@ export const COMMAND_DOCS: { name: string; usage: string; description: string }[
   { name: 'Copy', usage: 'Copy [MOVE] [AS] [HERE] [DUPLICATE] [TO=<path>] [CREATEFOLDER=<name>] [UPDATEALL|UPDATEEXISTING] [WHENEXISTS=ask|skip|replace|rename|keepnewer]', description: 'Copy or move the selected items (default destination: {destpath}).' },
   { name: 'Delete', usage: 'Delete [NORECYCLE|SHIFT] [QUIET]', description: 'Delete the selected items (to trash by default).' },
   { name: 'Rename', usage: 'Rename [ADVANCED] [TO=<name>]', description: 'Inline rename, or the Advanced Rename dialog.' },
-  { name: 'CreateFolder', usage: 'CreateFolder [NAME=<name>]', description: 'Create a new folder in the source ({date|yyyy-MM-dd} macros allowed).' },
+  { name: 'CreateFolder', usage: 'CreateFolder [NAME=<name>] [MOVESELECTED]', description: 'Create a new folder in the source ({date|yyyy-MM-dd} macros allowed); MOVESELECTED moves the selected items into it.' },
   { name: 'CreateFile', usage: 'CreateFile [NAME=<name>]', description: 'Create a new empty file in the source.' },
   { name: 'Clipboard', usage: 'Clipboard COPY | CUT | PASTE | COPYNAMES[=nopaths]', description: 'File clipboard operations; COPYNAMES copies full paths (or names only).' },
   { name: 'Select', usage: 'Select ALL | NONE | INVERT | SIMILAR | RESELECT | SOURCETODEST[=notin|noext] | DESTTOSOURCE[=notin|noext] [DESELECTNOMATCH] | PATTERN[=<wildcard>] [DESELECT] [FILES|DIRS] [EXCLUSIVE]', description: 'Selection by wildcard, by extension, against the other display, or the previous selection.' },
-  { name: 'Set', usage: 'Set VIEW=… | DUAL | DUALVERT | TREE | VIEWER | HIDDEN | FLATVIEW | EXPANDABLEFOLDERS | NAVLOCK | STATUSBAR =on|off|toggle | THEME=dark|light|toggle | SOURCE=toggle | FILTER[=<pattern>] | QUICKFILTER=!prev | FONTSCALE=+10|-10|<percent> | AUTOSIZECOLUMNS | KEYMAP=standard|commander | SORTBY=… [REVERSE]', description: 'Change display and window settings.' },
+  { name: 'Set', usage: 'Set VIEW=… | DUAL | DUALVERT | TREE | VIEWER | FAVBAR | HIDDEN | FLATVIEW | EXPANDABLEFOLDERS | NAVLOCK | STATUSBAR =on|off|toggle | THEME=dark|light|toggle | SOURCE=toggle | FILTER[=<pattern>] | QUICKFILTER=!prev | FONTSCALE=+10|-10|<percent> | AUTOSIZECOLUMNS | KEYMAP=standard|commander | SORTBY=… [REVERSE]', description: 'Change display and window settings.' },
   { name: 'Find', usage: 'Find [PATTERN=<wildcard>] [REPEAT]', description: 'Search for files and folders.' },
   { name: 'GetSizes', usage: 'GetSizes [ALL]', description: 'Calculate folder sizes.' },
   { name: 'Properties', usage: 'Properties', description: 'Show properties, attributes, times and checksums.' },
@@ -338,7 +338,9 @@ const handlers: Record<string, Handler> = {
     else A.startInlineRename()
   },
   async createfolder(cmd) {
-    await A.createFolder(argString(cmd.args, 'NAME'))
+    const name = argString(cmd.args, 'NAME')
+    if (argFlag(cmd.args, 'MOVESELECTED')) return A.moveSelectedToNewFolder(name === undefined ? undefined : expandPlaceholders(name, ctx()))
+    await A.createFolder(name)
   },
   async createfile(cmd) {
     await A.createFile(argString(cmd.args, 'NAME'))
@@ -394,6 +396,7 @@ const handlers: Record<string, Handler> = {
     if (a.DUALVERT !== undefined) A.setPrefs({ dualVertical: toggleValue(s.prefs.dualVertical, argString(a, 'DUALVERT')) })
     if (a.TREE !== undefined) A.setPrefs({ showTree: toggleValue(s.prefs.showTree, argString(a, 'TREE')) })
     if (a.VIEWER !== undefined) A.setPrefs({ showViewer: toggleValue(s.prefs.showViewer, argString(a, 'VIEWER')) })
+    if (a.FAVBAR !== undefined) A.setPrefs({ showFavoritesBar: toggleValue(s.prefs.showFavoritesBar, argString(a, 'FAVBAR')) })
     if (a.HIDDEN !== undefined) A.setPrefs({ showHidden: toggleValue(s.prefs.showHidden, argString(a, 'HIDDEN')) })
     if (a.FLATVIEW !== undefined) await A.toggleFlatView(pane, toggleValue(activeTab(pane).flat, argString(a, 'FLATVIEW')))
     if (a.THEME !== undefined) {
@@ -577,13 +580,6 @@ export function comboFromEvent(e: KeyboardEvent): string {
   return parts.join('+')
 }
 
-/** Key combination for a favorite shortcut: like hotkeys, but Shift+letter stays distinct from the letter. */
-export function favoriteCombo(e: KeyboardEvent): string {
-  const base = comboFromEvent(e)
-  if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && /^[a-z]$/i.test(e.key)) return `Shift+${base}`
-  return base
-}
-
 function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null
   if (!el) return false
@@ -678,20 +674,25 @@ function onKeyDown(e: KeyboardEvent): void {
     return
   }
   if (isTypingTarget(e.target)) return
-  if ((e.target as HTMLElement | null)?.closest?.('.folder-tree')) return
 
   const combo = comboFromEvent(e)
   const bound = s.hotkeys[combo]
+  // A favorite's own shortcut opens its folder in the active pane, also while the folder tree has the focus.
+  // Key bindings of commands come first, so they stay the single source of truth for what a key does.
+  if (!bound) {
+    const fav = A.favoriteForShortcut(combo)
+    if (fav) {
+      e.preventDefault()
+      void A.openFavorite(s.activePane, fav)
+      return
+    }
+  }
+  if ((e.target as HTMLElement | null)?.closest?.('.folder-tree')) return
   // Printable keys without modifiers go to find-as-you-type unless they are bound (+ / -).
   const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
   if (printable && e.key === '>') {
     e.preventDefault()
     setState({ cliOpen: true })
-    return
-  }
-  // Favorite shortcut keys (e.g. "P" → Projects) come before the other bindings.
-  if (!s.fayt && A.runFavoriteKey(favoriteCombo(e))) {
-    e.preventDefault()
     return
   }
   if (printable && !bound) {

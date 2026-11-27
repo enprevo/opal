@@ -31,8 +31,8 @@ import { formatDate, formatSize, pluralize } from '@shared/format'
 import { fileTypeLabel, IMAGE_EXTENSIONS, VIDEO_EXTENSIONS } from '@shared/filetypes'
 import { attrString } from '@shared/sort'
 import { basename, dirname, stem, validateFileName } from '@shared/paths'
-import { NameText } from './FindAsYouType'
 import { FileIcon, thumbUrl } from './FileIcon'
+import { NameText } from './FindAsYouType'
 import { readDragPaths } from './FileDisplay'
 
 interface RenderCtx {
@@ -41,6 +41,13 @@ interface RenderCtx {
   meta: ReturnType<typeof getState>['meta']
   labels: ReturnType<typeof getState>['labels']
   labelDefs: LabelDef[]
+  folderStyles: ReturnType<typeof getState>['folderStyles']
+}
+
+/** Background colour the user gave to a folder's row, as the CSS variable the `.tinted` rule reads. */
+function tintStyle(ctx: Pick<RenderCtx, 'folderStyles'>, e: FileEntry): React.CSSProperties | undefined {
+  const bg = e.isDir ? ctx.folderStyles[e.path]?.bg : undefined
+  return bg ? ({ '--tint': bg } as React.CSSProperties) : undefined
 }
 
 interface ColDef {
@@ -154,7 +161,7 @@ export function autosizeColumn(pane: 0 | 1, col: SortColumn): number {
   const s = getState()
   const tab = activeTab(pane, s)
   const entries = visibleEntries(tab, s.prefs).slice(0, 3000)
-  const ctx: RenderCtx = { tab, prefs: s.prefs, meta: s.meta, labels: s.labels, labelDefs: s.labelDefs }
+  const ctx: RenderCtx = { tab, prefs: s.prefs, meta: s.meta, labels: s.labels, labelDefs: s.labelDefs, folderStyles: s.folderStyles }
   const font = `${(13 * s.prefs.fontScale) / 100}px ${getComputedStyle(document.body).fontFamily}`
   let w = textWidth(COLS[col].label, font) + 30
   for (const e of entries) {
@@ -180,6 +187,7 @@ export function FileList({ pane }: { pane: 0 | 1 }) {
   const clipboard = useStore((s) => s.clipboard)
   const labels = useStore((s) => s.labels)
   const labelDefs = useStore((s) => s.labelDefs)
+  const folderStyles = useStore((s) => s.folderStyles)
   const meta = useStore((s) => s.meta)
   const entries = visibleEntries(tab, prefs)
   const rowsData = displayRows(tab, prefs)
@@ -251,7 +259,7 @@ export function FileList({ pane }: { pane: 0 | 1 }) {
   }, [metaCols, firstRow, entries, tab.sort.column])
 
   const cutSet = clipboard?.cut ? new Set(clipboard.paths) : null
-  const ctx: RenderCtx = { tab, prefs, meta, labels, labelDefs }
+  const ctx: RenderCtx = { tab, prefs, meta, labels, labelDefs, folderStyles }
 
   const onItemMouseDown = (e: React.MouseEvent, entry: FileEntry): void => {
     if (e.button === 2) {
@@ -333,6 +341,7 @@ export function FileList({ pane }: { pane: 0 | 1 }) {
       cutSet?.has(entry.path) && 'cut',
       dropTarget === entry.path && 'drop-target',
       entry.isDir && 'dir',
+      entry.isDir && folderStyles[entry.path]?.bg && 'tinted',
       index % 2 === 1 && 'odd'
     ]
       .filter(Boolean)
@@ -391,7 +400,8 @@ export function FileList({ pane }: { pane: 0 | 1 }) {
             top: Math.floor(i / layout.cols) * layout.cellH,
             left: 4 + (i % layout.cols) * layout.cellW,
             width: layout.cellW - 4,
-            height: layout.cellH - (mode === 'list' ? 0 : 4)
+            height: layout.cellH - (mode === 'list' ? 0 : 4),
+            ...tintStyle(ctx, e)
           }}
           className={cls(e, i)}
           itemProps={itemProps(e)}
@@ -601,7 +611,7 @@ function DetailsRow({ entry, top, height, pane, ctx, className, itemProps }: Row
   const columns = visibleColumns(prefs)
   const tree = treeMode(tab, prefs)
   return (
-    <div className={`${className} row`} style={{ top, height, gridTemplateColumns: gridTemplate(columns, widths) }} {...itemProps}>
+    <div className={`${className} row`} style={{ top, height, gridTemplateColumns: gridTemplate(columns, widths), ...tintStyle(ctx, entry) }} {...itemProps}>
       {columns.map((c) =>
         c === 'name' ? (
           <div key={c} className="cell name-cell" style={tree ? { paddingLeft: 2 + (entry.depth ?? 0) * 18 } : undefined}>
@@ -765,7 +775,7 @@ function ColumnView({
             {list.length === 0 && <div className="mcol-empty">{tab.children[dir] || dir === tab.path ? 'Empty folder' : 'Loading…'}</div>}
             {list.map((e, i) => {
               const inActive = dir === active
-              const base = inActive ? cls(e, i) : `item${e.path === selectedChild ? ' path-selected' : ''}${e.isDir ? ' dir' : ''}`
+              const base = inActive ? cls(e, i) : `item${e.path === selectedChild ? ' path-selected' : ''}${e.isDir ? ' dir' : ''}${e.isDir && ctx.folderStyles[e.path]?.bg ? ' tinted' : ''}`
               const props = inActive
                 ? itemProps(e)
                 : {
@@ -775,7 +785,7 @@ function ColumnView({
                     onContextMenu: (ev: React.MouseEvent) => onContextMenu(ev, e)
                   }
               return (
-                <div key={e.path} className={`${base} mrow`} {...props}>
+                <div key={e.path} className={`${base} mrow`} style={tintStyle(ctx, e)} {...props}>
                   <FileIcon path={e.path} isDir={e.isDir} />
                   <span className="name-text">
                     <NameText pane={pane} name={displayName(e, prefs)} />

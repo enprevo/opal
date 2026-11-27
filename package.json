@@ -1,7 +1,7 @@
 {
   "name": "opal-file-manager",
   "productName": "Opal",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Fast, keyboard-friendly dual-pane file manager for Windows, macOS and Linux — tabs, expandable folders, Quick Look, batch rename and local semantic search.",
   "keywords": [
     "file-manager",
@@ -29,6 +29,7 @@
     "url": "https://github.com/enprevo"
   },
   "main": "./out/main/index.js",
+  "desktopName": "opal-file-manager.desktop",
   "engines": {
     "node": ">=22.12"
   },
@@ -36,6 +37,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "postinstall": "node build/linux-dev-sandbox.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",

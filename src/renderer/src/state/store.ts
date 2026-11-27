@@ -1,13 +1,15 @@
 import { useSyncExternalStore } from 'react'
 import type { AppInfo } from '../../../preload'
+import type { MenuEntry } from '../components/ContextMenu'
 import {
   DEFAULT_LABELS,
   DEFAULT_PREFS,
   type DirListing,
-  type FavoriteNode,
+  type Favorite,
   type UiState,
   type FileEntry,
   type FolderFormat,
+  type FolderStyle,
   type GroupBy,
   type ItemMeta,
   type JobProgress,
@@ -79,7 +81,7 @@ export interface AppState {
   ready: boolean
   info: AppInfo
   prefs: Prefs
-  favorites: FavoriteNode[]
+  favorites: Favorite[]
   recent: string[]
   hotkeys: Record<string, string>
   /** Pane sizes and column widths (persisted). */
@@ -91,8 +93,16 @@ export interface AppState {
   clipboard: { paths: string[]; cut: boolean } | null
   jobs: Record<string, JobProgress>
   dialog: DialogRequest | null
-  /** File context menu, or a menu with its own items (favorites, …). */
-  contextMenu: { x: number; y: number; pane: 0 | 1; target: FileEntry | null; items?: unknown[] } | null
+  /** `folder` is set when the menu was opened on a folder name (path bar, folder tree, favorites) instead of a list item. */
+  contextMenu: {
+    x: number
+    y: number
+    pane: 0 | 1
+    target: FileEntry | null
+    folder?: { path: string; favorite?: Favorite }
+    /** A menu with its own entries (favorites bar: files, groups, the bar itself). */
+    custom?: { items: MenuEntry[]; testId: string }
+  } | null
   toasts: Toast[]
   undoLabel: string
   cliOpen: boolean
@@ -103,6 +113,10 @@ export interface AppState {
   /** Colour labels (tags) per path, and their definitions. */
   labels: Readonly<Record<string, string[]>>
   labelDefs: LabelDef[]
+  /** Custom folder icon / row colours, by path. */
+  folderStyles: Readonly<Record<string, FolderStyle>>
+  /** Colour of each favorites group's folder icon, by group name. */
+  favoriteGroupColors: Readonly<Record<string, string>>
   /** Lazily loaded column metadata (image dimensions, folder item counts). */
   meta: Readonly<Record<string, ItemMeta>>
   /** Remembered view/sort/grouping per folder. */
@@ -152,6 +166,8 @@ const initial: AppState = {
   navLock: false,
   labels: {},
   labelDefs: DEFAULT_LABELS,
+  folderStyles: {},
+  favoriteGroupColors: {},
   meta: {},
   folderFormats: {},
   quickLook: false,

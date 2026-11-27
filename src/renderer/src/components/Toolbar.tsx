@@ -42,12 +42,13 @@ import {
   Sparkles,
   ScanEye,
   Wand2,
-  SunMoon
+  SunMoon,
+  Bookmark
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useStore, activeTab, type AppState } from '../state/store'
 import { keyFor, runCommand } from '../state/commands'
-import { isFavorite, resolvedTheme } from '../state/actions'
+import { resolvedTheme } from '../state/actions'
 
 export interface ToolbarButtonDef {
   id: string
@@ -89,6 +90,7 @@ export const TOOLBAR_BUTTONS: ToolbarButtonDef[] = [
   { id: 'dual', group: 'panes', icon: fixed(Columns2), label: 'Dual', desc: 'Show two file displays: source and destination', command: 'Set DUAL=toggle', active: (s) => s.prefs.dualDisplay },
   { id: 'dualvert', group: 'panes', icon: (s) => (s.prefs.dualVertical ? Rows2 : Columns2), label: 'Orientation', desc: 'Place the two displays side by side or one above the other', command: 'Set DUALVERT=toggle', disabled: (s) => !s.prefs.dualDisplay },
   { id: 'tree', group: 'panes', icon: fixed(FolderTree), label: 'Tree', desc: 'Show or hide the sidebar with favorites, places, labels and the folder tree', command: 'Set TREE=toggle', active: (s) => s.prefs.showTree },
+  { id: 'favbar', group: 'panes', icon: fixed(Bookmark), label: 'Fav bar', desc: 'Show or hide the favorites bar under the toolbar', command: 'Set FAVBAR=toggle', active: (s) => s.prefs.showFavoritesBar },
   { id: 'viewer', group: 'panes', icon: fixed(PanelRight), label: 'Viewer', desc: 'Preview pane on the right for the focused file', command: 'Set VIEWER=toggle', active: (s) => s.prefs.showViewer },
   { id: 'hidden', group: 'panes', icon: (s) => (s.prefs.showHidden ? Eye : EyeOff), label: 'Hidden', desc: 'Show or hide hidden and system files', command: 'Set HIDDEN=toggle', active: (s) => s.prefs.showHidden },
   { id: 'find', group: 'tools', icon: fixed(Search), label: 'Find', desc: 'Search by name, content, size or date', command: 'Find' },
@@ -99,7 +101,7 @@ export const TOOLBAR_BUTTONS: ToolbarButtonDef[] = [
   { id: 'sync', group: 'tools', icon: fixed(ArrowLeftRight), label: 'Sync', desc: 'Compare and synchronize the two panes', command: 'Synchronize', disabled: (s) => !s.prefs.dualDisplay },
   { id: 'dupes', group: 'tools', icon: fixed(Files), label: 'Duplicates', desc: 'Find duplicate files by content', command: 'Duplicates' },
   { id: 'sizes', group: 'tools', icon: fixed(Calculator), label: 'Sizes', desc: 'Calculate the size of the selected folders', command: 'GetSizes' },
-  { id: 'fav', group: 'tools', icon: fixed(Star), label: 'Favorite', desc: 'Add or remove the current folder from favorites', command: 'Favorites', active: (s) => s.favorites.length > 0 && isFavorite(tab(s).path) },
+  { id: 'fav', group: 'tools', icon: fixed(Star), label: 'Favorite', desc: 'Add or remove the current folder from favorites', command: 'Favorites', active: (s) => s.favorites.some((f) => f.path === tab(s).path) },
   { id: 'undo', group: 'tools', icon: fixed(Undo2), label: 'Undo', desc: 'Undo the last rename, move, copy or new item', command: 'Undo', disabled: (s) => !s.undoLabel },
   { id: 'newwindow', group: 'app', icon: fixed(AppWindow), label: 'Window', desc: 'Open a new window on this folder', command: 'Go NEWWINDOW' },
   { id: 'cli', group: 'app', icon: fixed(Terminal), label: 'Command', desc: 'Command line for Opal commands, e.g. Select PATTERN=*.jpg', command: 'CLI' },
@@ -109,7 +111,7 @@ export const TOOLBAR_BUTTONS: ToolbarButtonDef[] = [
   { id: 'help', group: 'app', icon: fixed(HelpCircle), label: 'Help', desc: 'List of commands and keyboard shortcuts', command: 'Help' }
 ]
 
-export const DEFAULT_TOOLBAR = TOOLBAR_BUTTONS.filter((b) => !['advrename', 'view-list', 'newwindow', 'expandable', 'terminal'].includes(b.id)).map((b) => b.id)
+export const DEFAULT_TOOLBAR = TOOLBAR_BUTTONS.filter((b) => !['advrename', 'view-list', 'newwindow', 'expandable', 'terminal', 'favbar'].includes(b.id)).map((b) => b.id)
 
 export function Toolbar() {
   const state = useStore((s) => s)

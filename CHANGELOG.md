@@ -3,6 +3,95 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] — 2026-11-26
+
+### Changed
+
+- Favorites are the bar and the "Edit favorites…" bookmark manager (below); they replace the favorites tree and
+  "Organize favorites" of 0.3.0. Shortcut keys of favorites use Ctrl or Alt (or a function key), not a single letter.
+- Find as you type (0.3.0) works as before; "/" lists the favorites (bar and sidebar) and the recent folders.
+
+### Added
+
+- "Move to new folder…" in the right-click menu of files and folders: creates a folder next to them (named
+  "New Folder", "New Folder 2"… unless you type another name) and moves every selected item into it, then selects
+  the new folder. Also available as `CreateFolder MOVESELECTED [NAME=<name>]`, to bind to a key.
+- Favorites bar under the toolbar. Drag folders and files onto it (from a file list or from the desktop) to add them;
+  click a folder to go into it (middle-click: new tab) and a file to open it with its app. Groups show as folders on
+  the bar with a drop-down list: drop items on a group to put them in it, or hold the drag there to open it and drop at
+  an exact place. Items and groups are reordered by dragging. Right-click for rename, move to group, show a file in
+  its folder, new group, remove group (its favorites stay) and hiding the bar. The bar and the sidebar Favorites show
+  the same list; file favorites are opened from the sidebar too. Show or hide it in Settings → Appearance, with the
+  optional "Fav bar" toolbar button or `Set FAVBAR=toggle`.
+- "Edit favorites…" in the right-click menu of the favorites bar, its items and groups (and of the sidebar
+  Favorites), laid out like a browser's bookmark manager: the favorites bar and its folders on the left, the content
+  of the chosen folder on the right. Drag rows to reorder them or onto a folder (left or right) to move them, drag
+  folders along the bar, drop files and folders from the desktop, double-click to rename in place (or open a folder),
+  right-click for Rename, Move to, Remove; search across all folders; shortcuts are set on each row and refused with
+  the reason when taken. Nothing changes until Save. Folders show what is inside them, both under their row on the
+  right and under their name on the left; the arrow beside a folder (or the Left and Right keys) hides and shows it.
+- Colored favorites folders: right-click a group on the favorites bar, in the sidebar or in "Edit favorites" and pick
+  a Folder color (or Default). The color shows on the bar, in its drop-down list, in the sidebar and in "Edit
+  favorites", follows the group when it is renamed, and is kept in exported settings.
+- Editable labels: right-click a label in the sidebar to rename it, change its color or delete it (it is taken off
+  the items that have it, after asking); the + beside the Labels title adds a new one. The sidebar now lists every
+  label.
+- Sidebar sections (Favorites, Places, Folders, Labels) open and close from their title, and stay so between sessions.
+- The window opens as it was left: its size and place, and whether it was maximized or full screen (leaving full
+  screen brings it back maximized if it was). A place on a screen that is no longer connected is not used. This stays
+  on each computer: it is not part of exported settings.
+- One-step install from a clone: double-click `install.cmd` on Windows, run `./install.sh` on macOS and Linux. It
+  installs the dependencies, builds and packages Opal for the computer, installs it (Windows: for the user; macOS:
+  Applications; Linux: .deb, .rpm or AppImage with a menu entry) and starts it; when Node.js is missing it offers to
+  install it. Afterwards it deletes the packaged app it made and tells how much space it freed (`--keep` keeps it,
+  `--clean-all` also deletes the dependencies and the build).
+
+### Fixed
+
+- Settings changed just before quitting (menu, Ctrl+Q, logging out) are saved: quitting waits until they are written.
+
+### Changed
+
+- While the favorites bar is shown, the sidebar no longer repeats the Favorites section; hiding the bar brings it back.
+- More room around the toolbar buttons, the favorites bar and the items of right-click menus.
+- Labels are listed under Folders in the sidebar.
+- Favorites bar: a folder or file dragged onto it lands exactly where it is dropped, also in the space between two
+  favorites (a line shows where); before it only went there when dropped on a favorite, and otherwise at the end. One
+  that is already a favorite moves to the new place (keeping its name and shortcut) instead of staying where it was.
+
+### Development
+
+- Linux: `npm install` checks whether the system blocks the Chromium sandbox for the Electron in `node_modules`
+  (Ubuntu 23.10+ with AppArmor, helper not setuid root). Only then that Electron is started with `--no-sandbox`, so
+  `npm start`, `npm run dev` and tools that run it directly no longer abort at once. Installed packages and Windows
+  and macOS are unchanged.
+- Right-click a folder name in the path bar, the folder tree or the Favorites section for a folder menu: Properties,
+  add to favorites with a shortcut key, and a custom color for the folder icon and for the background of its row.
+  The same color entries are in the context menu of a folder in the file list.
+- Favorites can have a shortcut (Ctrl or Alt with a key, or a function key) that opens the folder in the active pane
+  from anywhere, also while the folder tree has the focus. Keys already used by a command or another favorite are
+  refused. The shortcut is shown next to the favorite.
+- Folder colors are shown in the path bar, the folder tree, Favorites and every file view, and are kept when the
+  folder is renamed in Opal. They are part of exported settings.
+
+### Previews
+
+- Source code in Quick Look and the viewer pane is shown with syntax highlighting, chosen by file name or extension
+  (JavaScript/TypeScript, Python, C/C++, C#, Java, Go, Rust, Ruby, PHP, Kotlin, Swift, Lua, shell, PowerShell, batch,
+  SQL, JSON, YAML, TOML/INI, HTML/XML, CSS/SCSS/Less, Makefile, Dockerfile, CMake, Arduino, diff…) or a `#!` line.
+  Fenced code blocks in rendered Markdown are colored too. Colors follow the dark and light themes; plain text and
+  very large files are shown as before.
+- Network shares: a folder shows at once even when some of its items are slow to read, such as DFS links to a server
+  the user may not open (Linux tries to connect to it every time, half a second each, one after the other). Those
+  items appear with their name first and their details follow as they are read. An item that can't be read is not
+  asked for again for a minute, and slow items no longer hold up the rest of the app. A share folder with nine such
+  links opened in about 14 seconds and now opens in well under one.
+
+### Linux
+
+- The window and the dock now recognise the installed app (matching `desktopName`), so Opal gets its own icon, can be
+  pinned to the dock and the window carries the app icon.
+
 ## [0.3.0] — 2026-10-23
 
 First public release: everything below, plus:
@@ -32,7 +121,7 @@ First public release: everything below, plus:
 
 ## [0.2.0] — 2026-10-23
 
-Internal preview.
+First public release.
 
 ### File management
 
@@ -84,4 +173,6 @@ Internal preview.
   <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+digit and Option/AltGr combinations; Ubuntu AppImages start under the AppArmor
   user-namespace restriction; "Open terminal here" finds the terminal of each desktop.
 
+[0.4.0]: https://github.com/enprevo/opal/releases/tag/v0.4.0
 [0.3.0]: https://github.com/enprevo/opal/releases/tag/v0.3.0
+[0.2.0]: https://github.com/enprevo/opal/releases/tag/v0.2.0

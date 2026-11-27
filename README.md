@@ -30,11 +30,10 @@ understands what your documents are *about*, without sending anything to the clo
 
 | | |
 | --- | --- |
-| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
-| **Favorites** | Folders and files in nested, collapsible groups with separators. Right-click to give them a text or background colour, an icon or emoji, and a **shortcut key**: press <kbd>P</kbd> and you are in your Projects folder. *Organize favorites* reorders everything by drag and drop. |
+| **Dual pane, tabs, tree** | Source/destination panes side by side or stacked, tabs with undo-close, folder tree with keyboard navigation, breadcrumbs, a favorites bar for folders and files (drag them in, groups as drop-down folders), favorites in collapsible groups with their own shortcut keys, folder colours (icon and row background), recent places, multiple windows, Navigation Lock, mouse back/forward buttons. |
 | **Find as you type** | Just type in a file list: matches are highlighted and <kbd>↑</kbd>/<kbd>↓</kbd> jump between them. <kbd>Tab</kbd> switches to *Filter* (hide the rest) and *Subfolders* (search the whole branch); type <kbd>/</kbd> to jump to a favorite or a path. |
 | **Expandable folders** | In Details view folders open in place like a tree: <kbd>→</kbd> expands, <kbd>←</kbd> collapses or jumps to the parent. Copying nested items asks whether to recreate the structure. |
-| **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, source code with syntax colours and line numbers (C/C++, Python, JS/TS, Rust, Go, Java, C#, JSON, YAML, SQL, shell, assembly and more), archive contents, folder sizes — and use the arrow keys to flip through files. |
+| **Quick Look** | Press <kbd>Space</kbd> for a large preview — images, video, audio, PDF, rendered Markdown, syntax-highlighted code with line numbers, archive contents, folder sizes — and use the arrow keys to flip through files. |
 | **Column view** | Finder-style Miller columns with a preview column. |
 | **Semantic search** | “invoice for the boiler repair” finds *fattura manutenzione caldaia*. Two small multilingual AI models run **on your computer**: one finds candidates by meaning, the other re-reads them to rank precisely, combined with keyword ranking. PDF, Word, Excel, PowerPoint, OpenDocument, RTF, EPUB, e-mail, web pages, text and Markdown (code optionally). |
 | **Sort, group, columns** | Name, extension, size, type, dates, location, labels, image dimensions, item count. Group by kind, type, date, size, name or label. Drag columns to reorder, double-click to autosize. View, sorting and grouping are remembered per folder. |
@@ -82,10 +81,10 @@ where Finder conventions are added on top: <kbd>⌘</kbd>+<kbd>⌫</kbd> moves t
 | <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>W</kbd> / <kbd>Shift</kbd>+<kbd>W</kbd> | New / close / reopen tab | <kbd>Ctrl</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd> | Previous / next tab |
 | <kbd>Ctrl</kbd>+<kbd>F</kbd> | Find | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> | Search by meaning |
 | <kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>→</kbd>, mouse side buttons | Back / forward | <kbd>Ctrl</kbd>+<kbd>D</kbd> | Add / remove favorite |
-| Type any letters | Find as you type (<kbd>Tab</kbd>: filter / subfolders) | <kbd>/</kbd> | Go to a favorite or path |
 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>5</kbd> (macOS: <kbd>⌘</kbd>+<kbd>⌥</kbd>+<kbd>3</kbd>) | Column view | <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1…7</kbd> | Colour labels |
 | <kbd>F6</kbd> / <kbd>F7</kbd> / <kbd>F8</kbd> | Dual pane / viewer / tree | <kbd>Ctrl</kbd>+<kbd>Z</kbd> | Undo |
 | <kbd>></kbd> | Command line | <kbd>F1</kbd> | All commands and keys |
+| Type any letters | Find as you type (<kbd>Tab</kbd>: filter / subfolders) | <kbd>/</kbd> | Go to a favorite or path |
 
 ## Semantic search
 
@@ -130,9 +129,27 @@ Windows file brings your own keys to a Mac without overriding macOS conventions.
 on the computer they belong to. Opal keeps the previous version as `opal-settings.bak.json` and never replaces an
 unreadable file with defaults: it is set aside as `opal-settings.corrupt-<time>.json`.
 
+## Install from source in one step
+
+Clone the repository, then in its folder:
+
+| System | Run |
+| --- | --- |
+| **Windows** | double-click `install.cmd` |
+| **macOS / Linux** | `./install.sh` |
+
+It builds Opal for your computer and installs it, then starts it: on Windows for your user (Start menu and desktop
+shortcut), on macOS in Applications, on Linux with the `.deb` (Debian, Ubuntu, Mint…), the `.rpm` (Fedora, openSUSE,
+when `rpmbuild` is installed) or otherwise as an AppImage in `~/.local/bin` with a menu entry. If Node.js 22.12 or
+newer is missing it offers to install it (winget on Windows, [nvm](https://github.com/nvm-sh/nvm) in your home folder
+on macOS and Linux). Afterwards it deletes the packaged app it made (about 1 GB) and tells how much space it freed;
+the dependencies stay, so updating is quicker. Run it again after `git pull` to update. Options: `--no-open` (don't
+start Opal at the end), `--appimage` (Linux: the AppImage), `--keep` (keep the packaged app in `dist/install`),
+`--clean-all` (also delete the dependencies and the build).
+
 ## Build from source
 
-Requirements: [Node.js](https://nodejs.org/) 22 or newer.
+Requirements: [Node.js](https://nodejs.org/) 22.12 or newer.
 
 ```bash
 npm install

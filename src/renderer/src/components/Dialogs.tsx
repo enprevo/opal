@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { closeDialog, getState, toast, useStore } from '../state/store'
 import * as A from '../state/actions'
-import { COMMAND_DOCS } from '../state/commands'
-import type { ConflictPolicy, FileEntry, SyncItem } from '@shared/types'
+import { COMMAND_DOCS, comboFromEvent } from '../state/commands'
+import { FOLDER_COLORS, type ConflictPolicy, type FileEntry, type SyncItem } from '@shared/types'
+import { isFavoriteShortcut } from '@shared/settings'
+import { Folder } from 'lucide-react'
 import { previewRename, type CaseMode, type RenameMode, type RenameOptions } from '@shared/rename'
 import { basename, dirname, join, validateFileName } from '@shared/paths'
 import { formatDate, formatSize } from '@shared/format'
@@ -10,8 +12,7 @@ import { fileTypeLabel } from '@shared/filetypes'
 import { PrefsDialog, SetupDialog } from './Settings'
 import { SemanticDialog, TaggedDialog } from './SemanticSearch'
 import { FileIcon } from './FileIcon'
-import { FavoriteEditDialog, FavoritesManager } from './Favorites'
-import type { FavoriteGroup, FavoriteItem } from '@shared/favorites'
+import { FavoritesEditor } from './FavoritesEditor'
 
 export function DialogHost() {
   const dialog = useStore((s) => s.dialog)
@@ -46,6 +47,12 @@ export function DialogHost() {
     case 'properties':
       body = <PropertiesDialog {...(p as { entries: FileEntry[] })} />
       break
+    case 'favorites':
+      body = <FavoritesEditor />
+      break
+    case 'folderOptions':
+      body = <FolderOptionsDialog {...(p as { path: string })} />
+      break
     case 'prefs':
       body = <PrefsDialog />
       break
@@ -57,12 +64,6 @@ export function DialogHost() {
       break
     case 'nested':
       body = <NestedDialog {...(p as { op: string; count: number })} />
-      break
-    case 'favoriteEdit':
-      body = <FavoriteEditDialog {...(p as { node: FavoriteItem | FavoriteGroup; focus?: 'key' })} />
-      break
-    case 'favorites':
-      body = <FavoritesManager {...(p as { select?: string })} />
       break
     case 'duplicates':
       body = <DuplicatesDialog {...(p as { root: string })} />
@@ -538,6 +539,139 @@ function toLocalInput(ms: number): string {
   const d = new Date(ms)
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+/** Click, then press the key combination that should open the folder. Backspace clears it, Escape cancels. */
+export function ShortcutField({ value, onChange, empty = 'None — click to record' }: { value: string; onChange: (v: string) => void; empty?: string }) {
+  const [recording, setRecording] = useState(false)
+  return (
+    <button
+      type="button"
+      className={`key-capture shortcut-field${recording ? ' rec' : ''}`}
+      data-testid="shortcut-field"
+      title="Click, then press a key combination"
+      onClick={() => setRecording(true)}
+      onBlur={() => setRecording(false)}
+      onKeyDown={(e) => {
+        if (!recording) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return
+        if (e.key === 'Escape') setRecording(false)
+        else {
+          onChange(e.key === 'Backspace' || e.key === 'Delete' ? '' : comboFromEvent(e.nativeEvent))
+          setRecording(false)
+        }
+      }}
+    >
+      {recording ? 'Press keys… (Backspace clears)' : value || empty}
+    </button>
+  )
+}
+
+/** Quick palette plus any colour; '' is the default look. */
+function ColorField({ value, onChange, testId }: { value: string; onChange: (v: string) => void; testId: string }) {
+  return (
+    <div className="swatches" data-testid={testId}>
+      <button type="button" className={`swatch none${value ? '' : ' on'}`} title="Default" aria-label="Default" onClick={() => onChange('')} />
+      {FOLDER_COLORS.map((c) => (
+        <button
+          key={c.color}
+          type="button"
+          className={`swatch${value === c.color ? ' on' : ''}`}
+          style={{ background: c.color }}
+          title={c.name}
+          aria-label={c.name}
+          data-color={c.color}
+          onClick={() => onChange(c.color)}
+        />
+      ))}
+      <label className={`swatch custom${value && !FOLDER_COLORS.some((c) => c.color === value) ? ' on' : ''}`} title="Other color…" style={value && !FOLDER_COLORS.some((c) => c.color === value) ? { background: value } : undefined}>
+        <input type="color" value={value || '#4a8cf7'} onChange={(e) => onChange(e.target.value)} aria-label="Other color" />
+      </label>
+    </div>
+  )
+}
+
+function FolderOptionsDialog({ path }: { path: string }) {
+  const fav = A.favoriteOf(path)
+  const style = getState().folderStyles[path]
+  const [inFavorites, setInFavorites] = useState(!!fav)
+  const [label, setLabel] = useState(fav?.label ?? '')
+  const [shortcut, setShortcut] = useState(fav?.shortcut ?? '')
+  const [color, setColor] = useState(style?.color ?? '')
+  const [bg, setBg] = useState(style?.bg ?? '')
+  const folderName = basename(path) || path
+  const invalid = shortcut && !isFavoriteShortcut(shortcut) ? 'Use Ctrl or Alt together with a key, or a function key (F1–F24).' : ''
+  const conflict = shortcut && !invalid ? A.shortcutConflict(shortcut, path) : ''
+  const problem = inFavorites ? invalid || conflict : ''
+  const save = (): void => {
+    if (problem) return
+    A.setFolderStyle(path, { color: color || null, bg: bg || null })
+    if (inFavorites) {
+      const clean = label.trim()
+      A.upsertFavorite(path, { label: clean && clean !== folderName ? clean : undefined, shortcut: shortcut || undefined })
+    } else A.unfavorite(path)
+    closeDialog(true)
+  }
+  return (
+    <Modal
+      title={`Customize — ${folderName}`}
+      testId="folder-options-dialog"
+      footer={
+        <>
+          <button className="btn" onClick={() => closeDialog(null)}>
+            Cancel
+          </button>
+          <button className="btn primary" data-testid="folder-options-ok" disabled={!!problem} onClick={save}>
+            Save
+          </button>
+        </>
+      }
+    >
+      <div className="fo-preview tinted" style={bg ? ({ '--tint': bg } as React.CSSProperties) : undefined} data-testid="folder-options-preview">
+        <Folder size={15} style={color ? { color } : undefined} className="tree-icon folder" />
+        <span>{label.trim() || folderName}</span>
+      </div>
+      <div className="field">
+        <span>Folder color</span>
+        <ColorField value={color} onChange={setColor} testId="color-field" />
+      </div>
+      <div className="field">
+        <span>Row background</span>
+        <ColorField value={bg} onChange={setBg} testId="bg-field" />
+      </div>
+      <label className="check">
+        <input type="checkbox" data-testid="in-favorites" checked={inFavorites} onChange={(e) => setInFavorites(e.target.checked)} /> Show in Favorites
+      </label>
+      <label className="field">
+        <span>Name in the sidebar</span>
+        <input data-testid="favorite-name" value={label} placeholder={folderName} disabled={!inFavorites} spellCheck={false} onChange={(e) => setLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+      </label>
+      <div className="field">
+        <span>Shortcut that opens this folder</span>
+        <div className="row-flex">
+          <ShortcutField
+            value={shortcut}
+            onChange={(v) => {
+              setShortcut(v)
+              if (v) setInFavorites(true)
+            }}
+          />
+          {shortcut && (
+            <button className="btn" onClick={() => setShortcut('')}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+      {problem && (
+        <div className="error small" data-testid="shortcut-problem">
+          {problem}
+        </div>
+      )}
+    </Modal>
+  )
 }
 
 function PropertiesDialog({ entries }: { entries: FileEntry[] }) {

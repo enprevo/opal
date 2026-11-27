@@ -2,9 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CornerDownLeft, Filter, FolderTree, Search, Star, X } from 'lucide-react'
 import { getState, useStore, type FaytMode } from '../state/store'
 import * as A from '../state/actions'
-import { favoriteLabel } from '@shared/favorites'
-import { favoriteEntries } from './Favorites'
-import { FavoriteIconView } from './FavoriteIcon'
+import { basename } from '@shared/paths'
+import type { Favorite } from '@shared/types'
 
 const MODES: { id: FaytMode; label: string; icon: typeof Search; desc: string }[] = [
   { id: 'find', label: 'Find', icon: Search, desc: 'Jump to matching names (↑/↓ for the next one)' },
@@ -13,6 +12,8 @@ const MODES: { id: FaytMode; label: string; icon: typeof Search; desc: string }[
 ]
 
 const IDLE_CLOSE_MS = 6000
+
+const favoriteLabel = (f: Favorite): string => f.label || basename(f.path)
 
 /** Text matched by a name, for highlighting ('' when wildcards are used). */
 export function NameText({ pane, name }: { pane: 0 | 1; name: string }) {
@@ -60,9 +61,9 @@ export function FaytBar({ pane }: { pane: 0 | 1 }) {
   const suggestions = useMemo(() => {
     if (!goto || !fayt) return []
     const q = fayt.text.slice(1).trim().toLowerCase()
-    const favs = favoriteEntries(favorites)
-      .filter(({ item, group }) => !q || favoriteLabel(item).toLowerCase().includes(q) || item.path.toLowerCase().includes(q) || group.toLowerCase().includes(q))
-      .map(({ item, group }) => ({ kind: 'fav' as const, item, label: favoriteLabel(item), detail: group ? `${group} · ${item.path}` : item.path }))
+    const favs = favorites
+      .filter((f) => !q || favoriteLabel(f).toLowerCase().includes(q) || f.path.toLowerCase().includes(q) || (f.group ?? '').toLowerCase().includes(q))
+      .map((f) => ({ kind: 'fav' as const, item: f, label: favoriteLabel(f), detail: f.group ? `${f.group} · ${f.path}` : f.path }))
     const rec = recent
       .filter((r) => !favs.some((f) => f.item.path === r) && (!q || r.toLowerCase().includes(q)))
       .slice(0, 6)
@@ -81,7 +82,7 @@ export function FaytBar({ pane }: { pane: 0 | 1 }) {
   const runGoto = (): void => {
     const s = suggestions[pick]
     void A.closeFayt(true)
-    if (s?.kind === 'fav') void A.openFavorite(s.item)
+    if (s?.kind === 'fav') void A.openFavorite(pane, s.item)
     else if (s?.kind === 'recent') void A.navigate(pane, s.path)
     else if (fayt.text.length > 1) void A.navigate(pane, fayt.text.slice(1).trim() || fayt.text)
   }
@@ -93,7 +94,7 @@ export function FaytBar({ pane }: { pane: 0 | 1 }) {
           {suggestions.length === 0 && <div className="muted small pad">Type a favorite name, or a full path and Enter</div>}
           {suggestions.map((s, i) => (
             <div
-              key={s.kind === 'fav' ? s.item.id : s.path}
+              key={s.kind === 'fav' ? s.item.path : s.path}
               className={`fayt-sug${i === pick ? ' on' : ''}`}
               onMouseDown={(e) => {
                 e.preventDefault()
@@ -101,10 +102,10 @@ export function FaytBar({ pane }: { pane: 0 | 1 }) {
               }}
               onClick={runGoto}
             >
-              {s.kind === 'fav' ? <FavoriteIconView icon={s.item.icon} fallback={Star} size={13} color={s.item.color} /> : <CornerDownLeft size={13} />}
-              <b style={s.kind === 'fav' ? { color: s.item.color } : undefined}>{s.label}</b>
+              {s.kind === 'fav' ? <Star size={13} /> : <CornerDownLeft size={13} />}
+              <b>{s.label}</b>
               <span className="muted ellipsis">{s.detail}</span>
-              {s.kind === 'fav' && s.item.key && <kbd className="sb-key">{s.item.key}</kbd>}
+              {s.kind === 'fav' && s.item.shortcut && <kbd className="sb-key">{s.item.shortcut}</kbd>}
             </div>
           ))}
         </div>

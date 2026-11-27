@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, protocol, net, nativeImage, nativeTheme, Menu, clipboard, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, protocol, net, nativeImage, nativeTheme, Menu, clipboard, dialog, screen } from 'electron'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { spawn } from 'node:child_process'
@@ -10,7 +10,7 @@ import { fromImport, toExport } from '../shared/settings'
 import { SemanticClient } from './semantic/client'
 import type { SemanticOptions } from './semantic'
 import { listZip } from './semantic/extract'
-import type { FindOptions, PersistedState, SemanticSearchOptions, TransferRequest } from '../shared/types'
+import type { FindOptions, PersistedState, SemanticSearchOptions, TransferRequest, WindowState } from '../shared/types'
 
 if (process.env.OPAL_USER_DATA) app.setPath('userData', process.env.OPAL_USER_DATA)
 
@@ -130,7 +130,17 @@ function registerIpc(): void {
   ipcMain.handle('settings:get', () => settings.get())
   ipcMain.handle('settings:set', (_e, patch: Partial<PersistedState>) => settings.update(patch))
 
-  ipcMain.handle('fs:list', (_e, p: string, flat?: boolean) => (flat ? fsx.listFlat(p) : fsx.listDir(p)))
+  ipcMain.handle('fs:list', (e, p: string, flat?: boolean) =>
+    flat
+      ? fsx.listFlat(p)
+      : fsx.listDir(p, {
+          // Show the folder at once even when some entries are slow to read (network shares); send them when read.
+          lateAfterMs: 250,
+          onLate: (dir, entries) => {
+            if (!e.sender.isDestroyed()) e.sender.send('fs:listLate', dir, entries)
+          }
+        })
+  )
   ipcMain.handle('fs:hash', (_e, p: string, algo: 'md5' | 'sha1' | 'sha256') => fsx.hashFile(p, algo))
   ipcMain.handle('fs:duplicates', async (_e, root: string, opts: { minSize?: number; recursive?: boolean }, jobId: string) => {
     const token = tokenFor(jobId)
@@ -403,14 +413,132 @@ function registerProtocol(): void {
   })
 }
 
+/** The remembered window, with its place dropped when no connected screen shows enough of it (a monitor was unplugged). */
+function savedWindow(): WindowState | undefined {
+  const w = settings.get().window
+  if (!w || w.x === undefined || w.y === undefined) return w
+  const { x, y, width } = w
+  const visible = screen.getAllDisplays().some(({ workArea: a }) => {
+    const overlapX = Math.min(x + width, a.x + a.width) - Math.max(x, a.x)
+    return overlapX >= 100 && y >= a.y - 20 && y < a.y + a.height - 50
+  })
+  if (visible) return w
+  const { x: _x, y: _y, ...rest } = w // eslint-disable-line @typescript-eslint/no-unused-vars
+  return rest
+}
+
+/** Save the state of each open window now (used when quitting). */
+const windowSavers = new Set<() => void>()
+
+/**
+ * Keeps the window's size, place and maximized / full-screen state in the settings as they change, and returns
+ * what opens it as it was left. The size and place of the normal (not maximized) window are kept here rather than
+ * asked of the system, and so is whether it was maximized before full screen: some Linux window managers forget
+ * both for a window that opened maximized or full screen, and drop a maximize asked while the window appears.
+ */
+function rememberWindow(win: BrowserWindow, start?: WindowState): () => void {
+  const sameBox = (r: Electron.Rectangle, n: Electron.Rectangle): boolean =>
+    Math.abs(r.width - n.width) < 2 && Math.abs(r.height - n.height) < 2 && Math.abs(r.x - n.x) < 2 && Math.abs(r.y - n.y) < 2
+  const alive = (): boolean => !win.isDestroyed()
+  const plain = (): boolean => alive() && !win.isMaximized() && !win.isFullScreen() && !win.isMinimized()
+  const first = win.getBounds()
+  let normal: Electron.Rectangle = start ? { width: start.width, height: start.height, x: start.x ?? first.x, y: start.y ?? first.y } : first
+  /** Maximized when not in full screen. */
+  let maxed = !!start?.maximized
+  /** Until then the window is still appearing: a maximize the system drops is asked again. */
+  let settleUntil = 0
+  let timer: NodeJS.Timeout | null = null
+  const save = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = null
+    if (!alive() || win.isMinimized()) return
+    if (plain()) normal = win.getBounds()
+    const full = win.isFullScreen()
+    if (!full && Date.now() > settleUntil) maxed = win.isMaximized()
+    const state: WindowState = { width: normal.width, height: normal.height, x: normal.x, y: normal.y }
+    if (maxed) state.maximized = true
+    if (full) state.fullScreen = true
+    settings.update({ window: state })
+  }
+  const later = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(save, 400)
+  }
+  // Back from maximized or full screen: maximized again if it was before full screen, otherwise at its normal
+  // size and place, when the system did not do it.
+  const back = (): void => {
+    later()
+    setTimeout(() => {
+      if (!alive() || win.isFullScreen()) return
+      if (maxed && !win.isMaximized()) win.maximize()
+      else if (plain() && !sameBox(win.getBounds(), normal)) win.setBounds(normal)
+    }, 150)
+  }
+  win.on('resize', later)
+  win.on('move', later)
+  win.on('maximize', later)
+  win.on('enter-full-screen', later)
+  win.on('unmaximize', () => {
+    if (Date.now() > settleUntil && !win.isFullScreen()) maxed = false
+    back()
+  })
+  win.on('leave-full-screen', back)
+  win.on('close', save)
+  windowSavers.add(save)
+  win.on('closed', () => windowSavers.delete(save))
+
+  // Asked until it holds (maximized: for a moment; at most three seconds). Full screen is asked once the window has settled on
+  // screen, and checked by the window really covering the screen: asked too early, the request can be lost while
+  // the window still reports full screen.
+  const coversScreen = (): boolean => {
+    const b = win.getBounds()
+    const d = screen.getDisplayMatching(b).bounds
+    return b.width >= d.width && b.height >= d.height
+  }
+  return () => {
+    if (!start?.maximized && !start?.fullScreen) return
+    const shown = Date.now()
+    settleUntil = shown + 3000
+    let heldSince = 0
+    let askedFull = 0
+    const tick = (): void => {
+      if (!alive() || !settleUntil) return
+      const now = Date.now()
+      const ok = start.fullScreen ? win.isFullScreen() && coversScreen() : win.isMaximized()
+      if (ok) {
+        heldSince ||= now
+        if (start.fullScreen || now - heldSince >= 600) return void (settleUntil = 0)
+      } else {
+        heldSince = 0
+        if (now > settleUntil) return void (settleUntil = 0)
+        if (start.maximized && !win.isMaximized() && !win.isFullScreen()) win.maximize()
+        if (start.fullScreen && now - shown >= 300 && now - askedFull >= 700) {
+          askedFull = now
+          if (win.isFullScreen()) win.setFullScreen(false)
+          win.setFullScreen(true)
+        }
+      }
+      setTimeout(tick, 150)
+    }
+    tick()
+  }
+}
+
 function createWindow(startPaths?: string[]): void {
+  // The first window opens as it was last left; more windows open at the saved size, placed by the system.
+  const primary = startPaths === undefined && BrowserWindow.getAllWindows().length === 0
+  const saved = savedWindow()
+  const place = primary && saved?.x !== undefined ? { x: saved.x, y: saved.y } : {}
   const win = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: saved?.width ?? 1440,
+    height: saved?.height ?? 900,
+    ...place,
     minWidth: 800,
     minHeight: 500,
     show: false,
     title: 'Opal',
+    // Windows and macOS take the icon from the executable/bundle; Linux needs it on the window.
+    ...(process.platform === 'linux' ? { icon: app.isPackaged ? path.join(process.resourcesPath, 'icon.png') : path.join(app.getAppPath(), 'build', 'icon.png') } : {}),
     backgroundColor: settings.get().prefs.theme === 'light' ? '#f3f3f3' : '#1e1f22',
     autoHideMenuBar: true,
     webPreferences: {
@@ -422,13 +550,17 @@ function createWindow(startPaths?: string[]): void {
     }
   })
   if (!mainWindow) mainWindow = win
+  const openAsLeft = rememberWindow(win, primary ? saved : undefined)
   const wcId = win.webContents.id
   windowStarts.set(wcId, { paths: startPaths ?? [], primary: startPaths === undefined })
   win.on('closed', () => {
     windowStarts.delete(wcId)
     if (mainWindow === win) mainWindow = BrowserWindow.getAllWindows()[0] ?? null
   })
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    win.show()
+    openAsLeft()
+  })
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('before-input-event', (_e, input) => {
     if (input.type === 'keyDown' && input.key === 'F12' && input.control && input.shift) win.webContents.toggleDevTools()
@@ -504,9 +636,19 @@ app.whenReady().then(async () => {
   })
 })
 
-app.on('before-quit', () => {
-  void settings.flush()
+let settingsSaved = false
+app.on('before-quit', (e) => {
+  if (settingsSaved) return
+  // Quitting (menu, Ctrl+Q, the system) does not wait for promises: hold it until the settings, with the window as
+  // it is now, are on disk.
+  e.preventDefault()
+  settingsSaved = true
+  for (const save of windowSavers) save()
   void semantic?.stop()
+  void settings
+    .flush()
+    .catch(() => undefined)
+    .finally(() => app.quit())
 })
 app.on('window-all-closed', () => {
   void settings.flush().finally(() => {

@@ -148,6 +148,19 @@ export const DEFAULT_LABELS: LabelDef[] = [
   { id: 'gray', name: 'Gray', color: '#98989d' }
 ]
 
+/** Quick choices for a folder's icon and row colour (any colour can be picked in the folder dialog). */
+export const FOLDER_COLORS: { name: string; color: string }[] = [
+  { name: 'Red', color: '#ef5350' },
+  { name: 'Orange', color: '#fb8c3c' },
+  { name: 'Yellow', color: '#e8b84a' },
+  { name: 'Green', color: '#43b86a' },
+  { name: 'Teal', color: '#26b5a5' },
+  { name: 'Blue', color: '#4a8cf7' },
+  { name: 'Purple', color: '#a66be6' },
+  { name: 'Pink', color: '#ec5fa5' },
+  { name: 'Gray', color: '#8e96a3' }
+]
+
 export interface ItemMeta {
   width?: number
   height?: number
@@ -212,10 +225,33 @@ export interface Prefs {
   /** File display zoom (Set FONTSCALE), percent. */
   fontScale: number
   showStatusBar: boolean
+  /** Favorite groups collapsed in the sidebar. */
+  favoritesCollapsed: string[]
+  /** Horizontal favorites bar under the toolbar. */
+  showFavoritesBar: boolean
+  /** Favorite groups the user created, kept (as empty folders on the bar) even when they hold no favorite. */
+  favoriteGroups: string[]
+  /** Sidebar sections the user closed (favorites, places, folders, labels). */
+  sidebarCollapsed: string[]
 }
 
-export type { FavoriteNode, FavoriteItem, FavoriteGroup, FavoriteSeparator, FavoriteOpenIn } from './favorites'
-import type { FavoriteNode } from './favorites'
+export interface Favorite {
+  path: string
+  /** Display name (defaults to the folder name). */
+  label?: string
+  /** Group shown as a collapsible section in the sidebar; nested groups are joined with " / ". */
+  group?: string
+  /** Key combination (e.g. "Ctrl+Alt+1") that opens this folder in the active pane. */
+  shortcut?: string
+  /** The favorite is a file (opened with its app) rather than a folder (shown in the pane). */
+  file?: boolean
+}
+
+/** Colours the user gave to a folder: its icon and the background of its row (both "#rrggbb"). */
+export interface FolderStyle {
+  color?: string
+  bg?: string
+}
 
 /** Window layout remembered between sessions (sizes in pixels, ratio 0..1). */
 export interface UiState {
@@ -224,6 +260,16 @@ export interface UiState {
   paneRatio?: number
   /** Column widths of the details view, by column id. */
   columnWidths?: Record<string, number>
+}
+
+/** The main window as it was last left: size and place when not maximized, and whether it was maximized or full screen. */
+export interface WindowState {
+  width: number
+  height: number
+  x?: number
+  y?: number
+  maximized?: boolean
+  fullScreen?: boolean
 }
 
 export interface SessionTab {
@@ -239,16 +285,22 @@ export interface SessionPane {
 
 export interface PersistedState {
   prefs: Prefs
-  favorites: FavoriteNode[]
+  favorites: Favorite[]
   recent: string[]
   labels?: Record<string, string[]>
   labelDefs?: LabelDef[]
+  /** Custom icon / row colours, by folder path. */
+  folderStyles?: Record<string, FolderStyle>
+  /** Colour of each favorites group's folder icon ("#rrggbb"), by group name. */
+  favoriteGroupColors?: Record<string, string>
   folderFormats?: Record<string, FolderFormat>
   session?: { panes: SessionPane[]; activePane: number }
   /** Changes to the default key bindings: combo → command, or '' for a default binding that was removed. */
   hotkeys?: Record<string, string>
   toolbar?: ToolbarButton[]
   ui?: UiState
+  /** Size, place and maximized / full-screen state of the window on this computer. */
+  window?: WindowState
   /** Saved Advanced Rename presets, by name. */
   renamePresets?: Record<string, Record<string, unknown>>
 }
@@ -302,7 +354,11 @@ export const DEFAULT_PREFS: Prefs = {
   collapseSubfolders: true,
   keymap: 'standard',
   fontScale: 100,
-  showStatusBar: true
+  showStatusBar: true,
+  favoritesCollapsed: [],
+  showFavoritesBar: true,
+  favoriteGroups: [],
+  sidebarCollapsed: []
 }
 
 export type SemanticMatch = 'meaning' | 'words' | 'name'

@@ -17,22 +17,10 @@ import {
   type PaneState,
   type TabState
 } from './store'
-import { DEFAULT_LABELS, DEFAULT_PREFS, type ConflictPolicy, type UiState, type FileEntry, type FolderFormat, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
+import { DEFAULT_LABELS, DEFAULT_PREFS, FOLDER_COLORS, type ConflictPolicy, type LabelDef, type Favorite, type UiState, type FileEntry, type FolderFormat, type FolderStyle, type GroupBy, type LayoutPreset, type Prefs, type SessionPane, type SortSpec, type TransferOp, type ViewMode } from '@shared/types'
 import { basename, dirname, isAncestor, join, normalize, samePath } from '@shared/paths'
 import { compilePattern } from '@shared/wildcard'
-import {
-  favoriteForKey,
-  favoriteItems,
-  favoriteLabel,
-  findFavorite,
-  insertFavorite,
-  newFavoriteId,
-  removeFavorite as removeFav,
-  updateFavorite,
-  type FavoriteItem,
-  type FavoriteNode,
-  type FavoriteOpenIn
-} from '@shared/favorites'
+import { groupsInOrder, insertFavorites, moveFavorites, renameGroup, type FavoriteTarget } from '@shared/favorites'
 import { defaultHotkeys, effectiveHotkeys, hotkeyOverrides, installKeyboard } from './commands'
 
 const api = (): typeof window.opal => window.opal
@@ -87,6 +75,8 @@ export async function bootstrap(): Promise<void> {
     renamePresets: persisted.renamePresets ?? migrateLocalPresets(),
     labels: persisted.labels ?? {},
     labelDefs: persisted.labelDefs?.length ? persisted.labelDefs : DEFAULT_LABELS,
+    folderStyles: persisted.folderStyles ?? {},
+    favoriteGroupColors: persisted.favoriteGroupColors ?? {},
     folderFormats: persisted.folderFormats ?? {},
     roots,
     panes,
@@ -113,6 +103,7 @@ export async function bootstrap(): Promise<void> {
       }
     }
   })
+  api().onListLate(applyLateEntries)
   installKeyboard()
 
   await Promise.all(
@@ -379,6 +370,47 @@ export async function navigate(pane: 0 | 1, rawPath: string, opts: NavOptions = 
 // ---------------------------------------------------------------------------
 // Expandable folders (expand in place in the file display)
 // ---------------------------------------------------------------------------
+
+/**
+ * A folder listing came back before some of its entries were read (slow network share): they were shown with
+ * their name only, and now their details (dates, size, attributes) are in. Put them in wherever the folder is shown.
+ */
+export function applyLateEntries(dir: string, late: FileEntry[]): void {
+  if (!late.length) return
+  const byPath = new Map(late.map((e) => [e.path, e]))
+  const merge = (list: FileEntry[]): FileEntry[] | null => {
+    let changed = false
+    const out = list.map((e) => {
+      const n = byPath.get(e.path)
+      if (!n) return e
+      changed = true
+      return e.depth === undefined ? n : { ...n, depth: e.depth }
+    })
+    return changed ? out : null
+  }
+  for (const pane of [0, 1] as const) {
+    for (const t of getState().panes[pane].tabs) {
+      const inListing = !!t.listing && !t.flat && samePath(t.listing.path, dir)
+      const childKeys = Object.keys(t.children).filter((k) => samePath(k, dir))
+      if (!inListing && !childKeys.length) continue
+      updateTab(pane, t.id, (cur) => {
+        const patch: Partial<typeof cur> = {}
+        if (cur.listing && !cur.flat && samePath(cur.listing.path, dir)) {
+          const entries = merge(cur.listing.entries)
+          if (entries) patch.listing = { ...cur.listing, entries }
+        }
+        let children: Record<string, FileEntry[]> | null = null
+        for (const k of Object.keys(cur.children)) {
+          if (!samePath(k, dir)) continue
+          const kids = merge(cur.children[k])
+          if (kids) (children ??= { ...cur.children })[k] = kids
+        }
+        if (children) patch.children = children
+        return patch
+      })
+    }
+  }
+}
 
 async function loadChildren(paths: string[]): Promise<Record<string, FileEntry[]>> {
   const out: Record<string, FileEntry[]> = {}
@@ -792,9 +824,18 @@ export function moveFocus(pane: 0 | 1, delta: number | 'home' | 'end', mods: { s
   }
 }
 
-// ---------------------------------------------------------------------------
-// Find as you type
-// ---------------------------------------------------------------------------
+export function focusByPrefix(pane: 0 | 1, prefix: string): boolean {
+  const s = getState()
+  const tab = activeTab(pane, s)
+  const entries = visibleEntries(tab, s.prefs)
+  const lower = prefix.toLowerCase()
+  const cur = entries.findIndex((e) => e.path === tab.focusPath)
+  const ordered = [...entries.slice(Math.max(cur, 0)), ...entries.slice(0, Math.max(cur, 0))]
+  const hit = ordered.find((e) => e.name.toLowerCase().startsWith(lower))
+  if (!hit) return false
+  updateTab(pane, null, (t) => ({ focusPath: hit.path, anchorPath: hit.path, selected: new Set([hit.path]), scrollTick: t.scrollTick + 1 }))
+  return true
+}
 
 /** Case-insensitive "contains"; wildcards (* ?) when the text has them. */
 export function faytMatcher(text: string): (name: string) => boolean {
@@ -888,19 +929,6 @@ export async function closeFayt(keep = false): Promise<void> {
     if (activeTab(f.pane).flat) await toggleFlatView(f.pane, false)
   }
   requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-pane="${f.pane}"] .file-scroll`)?.focus())
-}
-
-export function focusByPrefix(pane: 0 | 1, prefix: string): boolean {
-  const s = getState()
-  const tab = activeTab(pane, s)
-  const entries = visibleEntries(tab, s.prefs)
-  const lower = prefix.toLowerCase()
-  const cur = entries.findIndex((e) => e.path === tab.focusPath)
-  const ordered = [...entries.slice(Math.max(cur, 0)), ...entries.slice(0, Math.max(cur, 0))]
-  const hit = ordered.find((e) => e.name.toLowerCase().startsWith(lower))
-  if (!hit) return false
-  updateTab(pane, null, (t) => ({ focusPath: hit.path, anchorPath: hit.path, selected: new Set([hit.path]), scrollTick: t.scrollTick + 1 }))
-  return true
 }
 
 export function toggleFocusedSelection(pane: 0 | 1): void {
@@ -1180,6 +1208,41 @@ export async function createFolder(name?: string): Promise<void> {
   }
 }
 
+/** First "New Folder", "New Folder 2", … that doesn't exist yet in `dir`. */
+async function freeFolderName(dir: string, base = 'New Folder'): Promise<string> {
+  const names = [base, ...Array.from({ length: 98 }, (_, i) => `${base} ${i + 2}`)]
+  const exists = await api().exists(names.map((n) => join(dir, n)))
+  return names[exists.indexOf(false)] ?? base
+}
+
+/** Create a folder in the current folder and move the selected items into it (Finder's "New Folder with Selection"). */
+export async function moveSelectedToNewFolder(name?: string): Promise<void> {
+  const pane = getState().activePane
+  const items = selectedEntries(pane)
+  if (!items.length) return
+  const dir = activeTab(pane).path
+  const suggested = name ?? (await freeFolderName(dir))
+  const n =
+    name ??
+    (await openDialog<string>('prompt', {
+      title: items.length === 1 ? `Move "${items[0].name}" to a new folder` : `Move ${items.length} items to a new folder`,
+      label: 'New folder name',
+      value: suggested,
+      validateName: true
+    }))
+  if (!n) return
+  let created: string
+  try {
+    created = await api().mkdir(dir, n)
+  } catch (e) {
+    toast(cleanError(e), 'error')
+    return
+  }
+  await transferItems('move', items.map((e) => e.path), created, undefined, { noNestedPrompt: true })
+  await refreshPane(pane, basename(created))
+  updateTab(pane, null, () => ({ selected: new Set([created]), focusPath: created, anchorPath: created }))
+}
+
 export async function createFile(name?: string): Promise<void> {
   const pane = getState().activePane
   const dir = activeTab(pane).path
@@ -1207,6 +1270,7 @@ export async function commitInlineRename(pane: 0 | 1, from: string, newName: str
   try {
     const to = await api().rename(from, newName)
     moveLabels([{ from, to }])
+    moveFolderStyles([{ from, to }])
     await refreshPane(pane, basename(to))
     updateTab(pane, null, () => ({ selected: new Set([to]) }))
     refreshUndo()
@@ -1223,6 +1287,7 @@ export async function advancedRename(): Promise<void> {
   if (!pairs || !pairs.length) return
   const r = await api().renameMany(pairs)
   moveLabels(r.done)
+  moveFolderStyles(r.done)
   if (r.errors.length) toast(`Rename: ${r.errors.length} error(s): ${r.errors[0]}`, 'error')
   else toast(`Renamed ${r.done.length} item(s)`)
   await refreshPane(pane)
@@ -1280,81 +1345,279 @@ export async function undoLast(): Promise<void> {
 }
 
 export function isFavorite(path: string): boolean {
-  return favoriteItems(getState().favorites).some((f) => samePath(f.path, path))
+  return getState().favorites.some((f) => samePath(f.path, path))
 }
 
-export function saveFavorites(favorites: FavoriteNode[]): void {
+function saveFavorites(favorites: Favorite[]): void {
   setState({ favorites })
   void api().setSettings({ favorites })
 }
 
-export function editFavorites(fn: (nodes: FavoriteNode[]) => FavoriteNode[]): void {
-  saveFavorites(fn(getState().favorites))
-}
-
 export function toggleFavorite(path: string = sourceDir()): void {
   const exists = isFavorite(path)
-  if (exists) saveFavorites(favoriteItems(getState().favorites).filter((f) => samePath(f.path, path)).reduce((acc, f) => removeFav(acc, f.id), getState().favorites))
-  else saveFavorites([...getState().favorites, { type: 'item', id: newFavoriteId(), path }])
+  saveFavorites(exists ? getState().favorites.filter((f) => !samePath(f.path, path)) : [...getState().favorites, { path }])
   toast(exists ? 'Removed from favorites' : 'Added to favorites')
 }
 
-export function removeFavorite(id: string): void {
-  editFavorites((n) => removeFav(n, id))
+/** Removes one favorite entry (the same folder may appear in several groups). */
+export function removeFavorite(fav: Favorite): void {
+  saveFavorites(getState().favorites.filter((f) => f !== fav))
 }
 
-/** Opens a favorite: folders in the chosen pane or a new tab, files with their application. */
-export async function openFavorite(fav: FavoriteItem, how: FavoriteOpenIn | 'other' = fav.openIn ?? 'source'): Promise<void> {
-  const s = getState()
-  let isDir = true
-  try {
-    isDir = (await api().stat(fav.path)).isDir
-  } catch {
-    // Unreachable (network share offline…): let navigate report it.
-  }
-  if (!isDir) {
-    void api().open(fav.path)
-    return
-  }
-  const source = s.activePane
-  const other: 0 | 1 = source === 0 ? 1 : 0
-  if (how === 'newtab') {
-    newTab(source, fav.path)
-    return
-  }
-  const pane = (how === 'dest' || how === 'other') && s.prefs.dualDisplay ? other : source
-  await navigate(pane, fav.path)
-  if (pane !== source) setActivePane(pane)
-}
-
-export async function renameFavorite(id: string): Promise<void> {
-  const node = findFavorite(getState().favorites, id)
-  if (!node || node.type === 'separator') return
-  const label = await openDialog<string>('prompt', { title: node.type === 'group' ? 'Rename group' : 'Rename favorite', label: 'Name', value: favoriteLabel(node), allowEmpty: node.type === 'item' })
+export async function renameFavorite(fav: Favorite): Promise<void> {
+  const label = await openDialog<string>('prompt', { title: 'Rename favorite', label: `Name shown for ${fav.path}`, value: fav.label ?? (basename(fav.path) || fav.path), allowEmpty: true })
   if (label === null || label === undefined) return
   const clean = label.trim()
-  if (node.type === 'group') {
-    if (clean) editFavorites((n) => updateFavorite(n, id, { label: clean }))
-  } else editFavorites((n) => updateFavorite(n, id, { label: clean && clean !== basename(node.path) ? clean : undefined }))
+  saveFavorites(getState().favorites.map((f) => (f === fav ? { ...f, label: clean && clean !== basename(f.path) ? clean : undefined } : f)))
 }
 
-export function toggleFavoriteGroup(id: string): void {
-  const node = findFavorite(getState().favorites, id)
-  if (node?.type === 'group') editFavorites((n) => updateFavorite(n, id, { collapsed: !node.collapsed }))
+export async function moveFavoriteToGroup(fav: Favorite): Promise<void> {
+  const group = await openDialog<string>('prompt', { title: 'Favorite group', label: 'Group name (empty = no group; use " / " for sub-groups)', value: fav.group ?? '', allowEmpty: true })
+  if (group === null || group === undefined) return
+  saveFavorites(getState().favorites.map((f) => (f === fav ? { ...f, group: group.trim() || undefined } : f)))
 }
 
-export async function newFavoriteGroup(afterId: string | null = null): Promise<void> {
-  const label = await openDialog<string>('prompt', { title: 'New group', label: 'Group name', value: 'New group' })
-  if (!label?.trim()) return
-  editFavorites((n) => insertFavorite(n, { type: 'group', id: newFavoriteId(), label: label.trim(), children: [] }, afterId, 'after'))
+export function toggleFavoriteGroup(group: string): void {
+  const cur = getState().prefs.favoritesCollapsed
+  setPrefs({ favoritesCollapsed: cur.includes(group) ? cur.filter((g) => g !== group) : [...cur, group] })
 }
 
-/** Navigates to the favorite bound to this key combination; false when none is. */
-export function runFavoriteKey(combo: string): boolean {
-  const fav = favoriteForKey(getState().favorites, combo)
-  if (!fav) return false
-  void openFavorite(fav)
-  return true
+// ---------------------------------------------------------------------------
+// Favorites bar: files and folders, groups shown as folders, drag and drop
+// ---------------------------------------------------------------------------
+
+/** Opens a favorite: a folder is shown in the pane (or a new tab), a file is opened with its app. */
+export async function openFavorite(pane: 0 | 1, fav: Favorite, how: 'here' | 'tab' = 'here'): Promise<void> {
+  if (fav.file) {
+    const err = await api().open(fav.path)
+    if (err) toast(err, 'error')
+    return
+  }
+  if (how === 'tab') newTab(pane, fav.path)
+  else await navigate(pane, fav.path)
+}
+
+/** Shows the folder holding a favorite file, with the file focused. */
+export async function showFavoriteInFolder(pane: 0 | 1, fav: Favorite): Promise<void> {
+  const parent = dirname(fav.path)
+  if (parent) await navigate(pane, parent, { focusName: basename(fav.path) })
+}
+
+/** Keeps groups that a move would leave empty, so a folder on the bar doesn't vanish while it is being reorganised. */
+function keepEmptiedGroups(before: Favorite[], after: Favorite[]): void {
+  const left = new Set(after.map((f) => f.group).filter(Boolean))
+  const emptied = groupsInOrder(before).filter((g) => !left.has(g))
+  const extra = getState().prefs.favoriteGroups
+  const missing = emptied.filter((g) => !extra.includes(g))
+  if (missing.length) setPrefs({ favoriteGroups: [...extra, ...missing] })
+}
+
+/** Adds files and folders (dropped on the bar or in a group) to the favorites. */
+export async function addFavoritePaths(paths: string[], target: FavoriteTarget = {}): Promise<void> {
+  const added: Favorite[] = []
+  for (const p of paths) {
+    try {
+      const entry = await api().stat(p)
+      added.push(entry.isDir ? { path: p } : { path: p, file: true })
+    } catch {
+      toast(`Cannot add ${basename(p) || p}: it no longer exists`, 'error')
+    }
+  }
+  if (!added.length) return
+  const before = getState().favorites
+  const { favorites, added: n, moved } = insertFavorites(before, added, target)
+  if (favorites !== before) {
+    keepEmptiedGroups(before, favorites)
+    saveFavorites(favorites)
+  }
+  const where = target.group ? ` in "${target.group}"` : ''
+  if (n) toast(n === 1 ? `Added to favorites${where}` : `Added ${n} favorites${where}`)
+  else if (moved) toast(moved === 1 ? `Moved in favorites${where}` : `Moved ${moved} favorites${where}`)
+  else toast(`Already in favorites${where}`)
+}
+
+/** Moves favorites (by list position) on the bar, into a group or out of one. */
+export function moveFavoritesTo(indices: number[], target: FavoriteTarget): void {
+  const before = getState().favorites
+  const after = moveFavorites(before, indices, target)
+  if (after === before) return
+  keepEmptiedGroups(before, after)
+  saveFavorites(after)
+}
+
+/** Moves a whole group (its folder on the bar) before another favorite. */
+export function moveFavoriteGroup(group: string, beforeIndex: number | null): void {
+  const favs = getState().favorites
+  const indices = favs.map((f, i) => (f.group === group ? i : -1)).filter((i) => i >= 0)
+  if (!indices.length) return
+  saveFavorites(moveFavorites(favs, indices, { group, beforeIndex }))
+}
+
+export async function createFavoriteGroup(): Promise<string | null> {
+  const name = await openDialog<string>('prompt', { title: 'New group', label: 'Name of the group (it shows as a folder on the favorites bar)', value: '' })
+  const clean = name?.trim()
+  if (!clean) return null
+  const s = getState()
+  if (groupsInOrder(s.favorites, s.prefs.favoriteGroups).includes(clean)) {
+    toast(`There is already a group named "${clean}"`, 'error')
+    return null
+  }
+  setPrefs({ favoriteGroups: [...s.prefs.favoriteGroups, clean] })
+  return clean
+}
+
+export async function renameFavoriteGroupPrompt(group: string): Promise<void> {
+  const name = await openDialog<string>('prompt', { title: 'Rename group', label: 'Name of the group', value: group })
+  const clean = name?.trim()
+  if (!clean || clean === group) return
+  const s = getState()
+  saveFavorites(renameGroup(s.favorites, group, clean))
+  const swap = (list: string[]): string[] => [...new Set(list.map((g) => (g === group ? clean : g)))]
+  setPrefs({ favoriteGroups: swap(s.prefs.favoriteGroups), favoritesCollapsed: swap(s.prefs.favoritesCollapsed) })
+  const color = s.favoriteGroupColors[group]
+  if (color) {
+    const colors = { ...s.favoriteGroupColors, [clean]: color }
+    delete colors[group]
+    persistGroupColors(colors)
+  }
+}
+
+/** Opens "Edit favorites" (names, groups, order, shortcuts). */
+export async function editFavorites(): Promise<void> {
+  setState({ contextMenu: null })
+  await openDialog('favorites')
+}
+
+/**
+ * Saves the result of "Edit favorites": the whole list and every group (empty ones are kept as folders on the bar),
+ * with the colour of each group's folder.
+ */
+export function saveFavoritesEdit(favorites: Favorite[], groups: string[], colors: Record<string, string> = {}): void {
+  saveFavorites(favorites)
+  const s = getState()
+  const kept = new Set(groups)
+  setPrefs({ favoriteGroups: [...kept], favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => kept.has(g)) })
+  const nextColors: Record<string, string> = {}
+  for (const [g, c] of Object.entries(colors)) if (kept.has(g) && c) nextColors[g] = c
+  persistGroupColors(nextColors)
+  toast('Favorites saved')
+}
+
+function persistGroupColors(favoriteGroupColors: Record<string, string>): void {
+  setState({ favoriteGroupColors })
+  void api().setSettings({ favoriteGroupColors })
+}
+
+/** Colours the folder of a favorites group (on the bar, in the sidebar and in "Edit favorites"); `null` is the default. */
+export function setFavoriteGroupColor(group: string, color: string | null): void {
+  const colors = { ...getState().favoriteGroupColors }
+  if (color) colors[group] = color
+  else delete colors[group]
+  persistGroupColors(colors)
+}
+
+/** Removes a group; its favorites stay, straight on the bar. */
+export function removeFavoriteGroup(group: string): void {
+  const s = getState()
+  saveFavorites(renameGroup(s.favorites, group, ''))
+  setPrefs({ favoriteGroups: s.prefs.favoriteGroups.filter((g) => g !== group), favoritesCollapsed: s.prefs.favoritesCollapsed.filter((g) => g !== group) })
+  if (s.favoriteGroupColors[group]) setFavoriteGroupColor(group, null)
+}
+
+// ---------------------------------------------------------------------------
+// Folder customisation: favorite shortcuts, icon and row colours
+// ---------------------------------------------------------------------------
+
+/** The favorite entry of a folder (the first one when it is listed in several groups). */
+export function favoriteOf(path: string): Favorite | undefined {
+  return getState().favorites.find((f) => samePath(f.path, path))
+}
+
+/** Adds the folder to the favorites, or changes its entry. A field set to `undefined` is removed (e.g. the shortcut). */
+export function upsertFavorite(path: string, patch: Partial<Omit<Favorite, 'path'>> = {}): void {
+  const favorites = getState().favorites
+  const cur = favoriteOf(path)
+  const next: Favorite = { ...(cur ?? { path }), ...patch }
+  for (const k of Object.keys(next) as (keyof Favorite)[]) if (next[k] === undefined) delete next[k]
+  saveFavorites(cur ? favorites.map((f) => (f === cur ? next : f)) : [...favorites, next])
+}
+
+/** Removes every entry of the folder from the favorites. */
+export function unfavorite(path: string): void {
+  saveFavorites(getState().favorites.filter((f) => !samePath(f.path, path)))
+}
+
+/** Why `combo` cannot be used as the shortcut of the favorite `path` ('' when it is free). */
+export function shortcutConflict(combo: string, path?: string): string {
+  const s = getState()
+  const command = s.hotkeys[combo]
+  if (command) return `Already used by the command "${command}"`
+  const other = s.favorites.find((f) => f.shortcut === combo && !(path && samePath(f.path, path)))
+  if (other) return `Already used by the favorite "${other.label || basename(other.path) || other.path}"`
+  return ''
+}
+
+export function favoriteForShortcut(combo: string): Favorite | undefined {
+  return getState().favorites.find((f) => f.shortcut === combo)
+}
+
+function persistFolderStyles(folderStyles: Record<string, FolderStyle>): void {
+  setState({ folderStyles })
+  void api().setSettings({ folderStyles })
+}
+
+/** Sets the icon and/or row colour of a folder. A `null` colour goes back to the default look. */
+export function setFolderStyle(path: string, patch: { color?: string | null; bg?: string | null }): void {
+  const styles = { ...getState().folderStyles }
+  const next: FolderStyle = { ...styles[path] }
+  if (patch.color !== undefined) {
+    if (patch.color) next.color = patch.color
+    else delete next.color
+  }
+  if (patch.bg !== undefined) {
+    if (patch.bg) next.bg = patch.bg
+    else delete next.bg
+  }
+  if (next.color || next.bg) styles[path] = next
+  else delete styles[path]
+  persistFolderStyles(styles)
+}
+
+/** Keeps colours attached to folders (and the folders inside them) that were renamed inside Opal. */
+export function moveFolderStyles(pairs: { from: string; to: string }[]): void {
+  const cur = getState().folderStyles
+  const keys = Object.keys(cur)
+  if (!keys.length) return
+  let changed = false
+  const next: Record<string, FolderStyle> = { ...cur }
+  for (const { from, to } of pairs) {
+    for (const k of keys) {
+      if (!(k in next)) continue
+      const inside = samePath(k, from) || isAncestor(from, k)
+      if (!inside) continue
+      const moved = samePath(k, from) ? to : join(to, k.slice(from.length).replace(/^[\\/]+/, ''))
+      next[moved] = next[k]
+      delete next[k]
+      changed = true
+    }
+  }
+  if (changed) persistFolderStyles(next)
+}
+
+/** Properties dialog of a folder that is not part of the list selection (path bar, folder tree). */
+export async function showFolderProperties(pane: 0 | 1, path: string): Promise<void> {
+  try {
+    const entry = await api().stat(path)
+    await openDialog('properties', { entries: [entry] })
+    await refreshPane(pane)
+  } catch (e) {
+    toast(cleanError(e), 'error')
+  }
+}
+
+/** Dialog with the folder's favorite name and shortcut, icon colour and row background. */
+export async function customizeFolder(path: string): Promise<void> {
+  await openDialog('folderOptions', { path })
 }
 
 export async function dropPaths(paths: string[], dest: string, mods: { ctrl: boolean; shift: boolean }): Promise<void> {
@@ -1433,6 +1696,78 @@ export function toggleGroup(pane: 0 | 1, key: string): void {
 // ---------------------------------------------------------------------------
 // Labels (colour tags)
 // ---------------------------------------------------------------------------
+
+/** Opens or closes a section of the sidebar (remembered between sessions). */
+export function toggleSidebarSection(id: string): void {
+  const cur = getState().prefs.sidebarCollapsed
+  setPrefs({ sidebarCollapsed: cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id] })
+}
+
+function persistLabelDefs(labelDefs: LabelDef[]): void {
+  setState({ labelDefs })
+  void api().setSettings({ labelDefs })
+}
+
+export async function renameLabelPrompt(id: string): Promise<void> {
+  const def = getState().labelDefs.find((l) => l.id === id)
+  if (!def) return
+  const name = await openDialog<string>('prompt', { title: 'Rename label', label: 'Name of the label', value: def.name })
+  const clean = name?.trim()
+  if (!clean || clean === def.name) return
+  if (getState().labelDefs.some((l) => l.id !== id && l.name.toLowerCase() === clean.toLowerCase())) {
+    toast(`There is already a label named "${clean}"`, 'error')
+    return
+  }
+  persistLabelDefs(getState().labelDefs.map((l) => (l.id === id ? { ...l, name: clean } : l)))
+}
+
+export function setLabelColor(id: string, color: string): void {
+  persistLabelDefs(getState().labelDefs.map((l) => (l.id === id ? { ...l, color } : l)))
+}
+
+/** Adds a label (with the first colour no label uses yet). */
+export async function createLabelPrompt(): Promise<void> {
+  const name = await openDialog<string>('prompt', { title: 'New label', label: 'Name of the label', value: '' })
+  const clean = name?.trim()
+  if (!clean) return
+  const defs = getState().labelDefs
+  if (defs.some((l) => l.name.toLowerCase() === clean.toLowerCase())) {
+    toast(`There is already a label named "${clean}"`, 'error')
+    return
+  }
+  let n = defs.length + 1
+  while (defs.some((l) => l.id === `label${n}`)) n++
+  const color = FOLDER_COLORS.find((c) => !defs.some((l) => l.color === c.color))?.color ?? FOLDER_COLORS[defs.length % FOLDER_COLORS.length].color
+  persistLabelDefs([...defs, { id: `label${n}`, name: clean, color }])
+}
+
+/** Removes a label, and takes it off every item that has it (after asking, when some do). */
+export async function deleteLabel(id: string): Promise<void> {
+  const s = getState()
+  const def = s.labelDefs.find((l) => l.id === id)
+  if (!def) return
+  if (s.labelDefs.length <= 1) {
+    toast('Keep at least one label', 'error')
+    return
+  }
+  const used = Object.values(s.labels).filter((ids) => ids.includes(id)).length
+  if (used) {
+    const ok = await openDialog<boolean>('confirm', {
+      title: 'Delete label',
+      message: `Delete the label "${def.name}"? It is removed from ${used === 1 ? '1 item' : `${used} items`}.`,
+      danger: true,
+      okLabel: 'Delete'
+    })
+    if (!ok) return
+    const labels: Record<string, string[]> = {}
+    for (const [p, ids] of Object.entries(getState().labels)) {
+      const next = ids.filter((x) => x !== id)
+      if (next.length) labels[p] = next
+    }
+    persistLabels(labels)
+  }
+  persistLabelDefs(getState().labelDefs.filter((l) => l.id !== id))
+}
 
 function persistLabels(labels: Record<string, string[]>): void {
   setState({ labels })
